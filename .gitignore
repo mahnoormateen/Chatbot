@@ -1,0 +1,42 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+.pnp
+.pnp.js
+
+# Build output
+.nuxt/
+.output/
+.nitro/
+.data/
+dist/
+build/
+*.tsbuildinfo
+
+# AdonisJS local state
+tmp/
+.adonisjs/
+
+# Environment (keep examples)
+.env
+.env.*
+!.env.example
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Test output
+coverage/
+.nyc_output/
+
+# Editors / OS
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
