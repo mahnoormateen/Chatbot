@@ -51,6 +51,19 @@ type ReplyPayload = {
   model: string
   prompt: string
   history: Message[]
+  /** Images attached to the new user turn, sent as inline data. */
+  images?: ImageAttachment[]
+}
+
+/**
+ * An image sent with a message. "data" is the raw base64 payload without
+ * the "data:*;base64," header, and "mimeType" is one of the image types
+ * the Gemini models accept. The same shape is stored on the message row
+ * so history can be replayed to the model as inline data.
+ */
+export type ImageAttachment = {
+  mimeType: string
+  data: string
 }
 
 /**
@@ -345,7 +358,7 @@ export default class GeminiService {
     const { model, result } = await this.#withFailover('generateContent', payload.model, (m) =>
       this.#client.models.generateContent({
         model: m,
-        contents: this.#buildContents(payload.prompt, payload.history),
+        contents: this.#buildContents(payload.prompt, payload.history, payload.images),
         config: this.#generationConfig(),
       })
     )
@@ -370,7 +383,7 @@ export default class GeminiService {
       (m) =>
         this.#client.models.generateContentStream({
           model: m,
-          contents: this.#buildContents(payload.prompt, payload.history),
+          contents: this.#buildContents(payload.prompt, payload.history, payload.images),
           config: this.#generationConfig(),
         })
     )
@@ -732,21 +745,39 @@ export default class GeminiService {
   }
 
   /**
-   * Turns the stored history plus the new prompt into the "contents"
-   * array expected by the API, keeping only the most recent turns so a
-   * long conversation cannot blow up the token budget.
+   * Turns the stored history plus the new turn into the "contents" array
+   * expected by the API, keeping only the most recent turns so a long
+   * conversation cannot blow up the token budget.
+   *
+   * Each user turn becomes text plus one inline image part per attached
+   * image. Because the images are stored on the message row, the model
+   * sees the same picture it saw when the turn was sent.
    */
-  #buildContents(prompt: string, history: Message[]): Content[] {
+  #buildContents(
+    prompt: string,
+    history: Message[],
+    promptImages: ImageAttachment[] = []
+  ): Content[] {
     const recent = history.slice(-geminiConfig.maxHistoryMessages)
 
     return [
       ...recent.map((message) => ({
         role: message.role === 'assistant' ? ('model' as const) : ('user' as const),
-        parts: [{ text: message.content }],
+        parts: [
+          ...(message.content ? [{ text: message.content }] : []),
+          ...((message.images ?? []) as ImageAttachment[]).map((image) => ({
+            inlineData: { mimeType: image.mimeType, data: image.data },
+          })),
+        ],
       })),
       {
         role: 'user' as const,
-        parts: [{ text: prompt }],
+        parts: [
+          ...(prompt ? [{ text: prompt }] : []),
+          ...promptImages.map((image) => ({
+            inlineData: { mimeType: image.mimeType, data: image.data },
+          })),
+        ],
       },
     ]
   }

@@ -1,9 +1,18 @@
 <script setup lang="ts">
+import type { MessageImage } from '~/types/api'
 import type { ChatMessage } from '~/composables/useChat'
 
 const props = defineProps<{ message: ChatMessage }>()
 
 const copied = ref(false)
+
+/** Images attached to this message (user turns only in practice). */
+const messageImages = computed(() => props.message.images ?? [])
+
+/** Rebuilds the data URI the backend stripped for transport. */
+function imageSrc(image: MessageImage): string {
+  return `data:${image.mimeType};base64,${image.data}`
+}
 
 /**
  * True while this bubble is an optimistic row that has not been replaced
@@ -45,6 +54,17 @@ async function copy() {
 <template>
   <article class="message" :class="props.message.role">
     <div class="bubble">
+      <div v-if="messageImages.length" class="images">
+        <img
+          v-for="(image, index) in messageImages"
+          :key="index"
+          class="thumb"
+          :src="imageSrc(image)"
+          :alt="`Attached image ${index + 1}`"
+          loading="lazy"
+        />
+      </div>
+
       <div v-if="isWaiting" class="typing" role="status" aria-label="Gemini is thinking">
         <span /><span /><span />
       </div>
@@ -88,7 +108,7 @@ async function copy() {
 
 .message.user .bubble {
   background: var(--accent-soft);
-  border-color: rgba(109, 140, 255, 0.3);
+  border-color: var(--accent-border);
 }
 
 .content {
@@ -96,6 +116,22 @@ async function copy() {
   /* Pre-wrapped so code blocks and line breaks from the model survive. */
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+}
+
+.images {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.thumb {
+  max-width: 240px;
+  max-height: 180px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  object-fit: cover;
+  background: var(--bg-elevated);
 }
 
 .footer {

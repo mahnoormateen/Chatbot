@@ -147,6 +147,25 @@ export interface GeminiConfig {
      */
     initialWaitMs: number
   }
+
+  /**
+   * Limits on documents a user can attach to a message.
+   *
+   * These exist because the files travel as inline base64 inside the very
+   * request that asks the question, so an unbounded upload would become an
+   * unbounded request. The total is kept under the inline request ceiling
+   * the API applies, leaving room for the history sent alongside it.
+   */
+  attachments: {
+    /** Ceiling for a single file. */
+    maxFileSizeBytes: number
+
+    /** Ceiling for one turn, summed across the files attached to it. */
+    maxTotalSizeBytes: number
+
+    /** How many files one message may carry. */
+    maxPerMessage: number
+  }
 }
 
 export const geminiConfig: GeminiConfig = {
@@ -226,6 +245,23 @@ export const geminiConfig: GeminiConfig = {
     probeTimeoutMs: 4_000,
     timeoutMs: 20_000,
     initialWaitMs: 8_000,
+  },
+
+  attachments: {
+    /**
+     * A single PDF is capped well under the request ceiling so that a
+     * large file cannot be the reason every turn starts failing.
+     */
+    maxFileSizeBytes: 8 * 1024 * 1024,
+
+    /**
+     * The inline request ceiling is roughly 20 MB once base64 inflation is
+     * accounted for. This leaves headroom for the conversation history,
+     * which is sent in the same request.
+     */
+    maxTotalSizeBytes: 12 * 1024 * 1024,
+
+    maxPerMessage: 3,
   },
 }
 

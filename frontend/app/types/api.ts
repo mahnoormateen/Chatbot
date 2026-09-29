@@ -20,11 +20,22 @@ export interface AuthPayload {
 
 export type MessageRole = 'user' | 'assistant'
 
+/**
+ * An image attached to a user message. "data" carries the raw base64
+ * payload (no "data:*;base64," header) and "mimeType" lets the client
+ * rebuild the data URI it needs to render the thumbnail.
+ */
+export interface MessageImage {
+  mimeType: string
+  data: string
+}
+
 export interface ApiMessage {
   id: number
   conversationId: number
   role: MessageRole
   content: string
+  images?: MessageImage[]
   createdAt: string
 }
 
@@ -70,6 +81,7 @@ export interface PendingMessage {
   conversationId: number
   role: MessageRole
   content: string
+  images?: MessageImage[]
   createdAt: string
   pending?: boolean
 }

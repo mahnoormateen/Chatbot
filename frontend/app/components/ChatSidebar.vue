@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { ComponentPublicInstance } from 'vue'
 import type { ApiConversation } from '~/types/api'
 
 const props = defineProps<{
@@ -17,6 +18,16 @@ const emit = defineEmits<{
 const editingId = ref<number | null>(null)
 const draftTitle = ref('')
 const renameInput = ref<HTMLInputElement | null>(null)
+
+/**
+ * Callback ref for the rename input. A plain "ref" here would be typed as
+ * an array because the input lives inside a v-for, and renameInput.value
+ * would then be an array instead of the element, breaking the .focus()
+ * call that follows next tick.
+ */
+function setRenameInput(element: Element | ComponentPublicInstance | null) {
+  renameInput.value = element instanceof HTMLInputElement ? element : null
+}
 
 async function startRename(conversation: ApiConversation) {
   editingId.value = conversation.id
@@ -73,7 +84,7 @@ function relativeTime(value: string): string {
               @submit.prevent="commitRename(conversation.id)"
             >
               <input
-                ref="renameInput"
+                :ref="setRenameInput"
                 v-model="draftTitle"
                 type="text"
                 maxlength="120"

@@ -78,6 +78,22 @@ export default defineNuxtConfig({
         { name: 'viewport', content: 'width=device-width, initial-scale=1' },
         { name: 'description', content: 'Chat with the Gemini API through an AdonisJS backend.' },
       ],
+
+      /**
+       * Puts the saved theme on <html> before the first paint.
+       *
+       * Without this the document renders with the dark palette from
+       * main.css and only swaps once Vue hydrates, so a reload on the
+       * light theme shows a dark flash first. It has to be an inline
+       * script in <head> for that reason, which is also why the
+       * storage key is repeated here instead of imported from
+       * app/composables/useTheme.ts; keep the two in step.
+       */
+      script: [
+        {
+          innerHTML: `(function(){try{var s=localStorage.getItem('gemini_chatbot.theme');var t=(s==='light'||s==='dark')?s:(window.matchMedia('(prefers-color-scheme: light)').matches?'light':'dark');document.documentElement.dataset.theme=t;}catch(e){document.documentElement.dataset.theme='dark';}})()`,
+        },
+      ],
     },
   },
 })

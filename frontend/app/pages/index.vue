@@ -50,14 +50,29 @@ async function loadEverything() {
 async function boot() {
   await refresh()
   ready.value = true
-  if (isAuthenticated.value) await loadEverything()
 }
 
 onMounted(boot)
 
-async function onAuthenticated() {
-  await loadEverything()
-}
+/**
+ * Loads the conversations and model list whenever a session starts.
+ *
+ * The auth panel used to signal a successful sign in/up with an
+ * "authenticated" event. That wiring was racy: useAuth sets the session
+ * state just before the event fires, which schedules the page re-render,
+ * and Vue's scheduled render can unmount <AuthPanel> before the promise
+ * continuation in its submit() reaches emit(). Vue then skips the emit
+ * silently (an unmounted component cannot dispatch), so loadEverything
+ * never ran and a freshly signed in user saw an empty conversation list.
+ *
+ * Watching the session state instead ties the initial load to the state
+ * change itself, so it cannot be skipped by component lifetimes. The
+ * false -> true edge fires once per real session: restored (boot), login
+ * or register.
+ */
+watch(isAuthenticated, (signedIn, wasSignedIn) => {
+  if (signedIn && !wasSignedIn) loadEverything()
+})
 
 async function onCreate() {
   await createConversation()
@@ -92,7 +107,7 @@ onMounted(scrollToBottom)
     <span class="spinner" aria-hidden="true" />
   </div>
 
-  <AuthPanel v-else-if="!isAuthenticated" @authenticated="onAuthenticated" />
+  <AuthPanel v-else-if="!isAuthenticated" />
 
   <div v-else class="layout">
     <ChatSidebar
@@ -126,6 +141,8 @@ onMounted(scrollToBottom)
           :disabled="sending"
           :loading="loadingModels"
         />
+
+        <ThemeToggle />
 
         <div class="account">
           <span class="avatar" aria-hidden="true">{{ user?.initials }}</span>

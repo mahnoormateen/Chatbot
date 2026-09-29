@@ -6,6 +6,7 @@ import type {
   ApiConversationDetail,
   ApiMessage,
   ApiModel,
+  MessageImage,
   PendingMessage,
 } from '~/types/api'
 
@@ -287,9 +288,9 @@ export function useChat() {
    * optimistic rows are replaced by the persisted messages once the
    * backend reports them in the "done" event.
    */
-  async function sendMessage(content: string): Promise<void> {
+  async function sendMessage(content: string, images: MessageImage[] = []): Promise<void> {
     const trimmed = content.trim()
-    if (!trimmed || sending.value) return
+    if ((!trimmed && images.length === 0) || sending.value) return
 
     let conversationId = activeId.value
     if (conversationId === null) {
@@ -307,6 +308,7 @@ export function useChat() {
       conversationId,
       role: 'user',
       content: trimmed,
+      images,
       createdAt: now,
       pending: true,
     })
@@ -329,7 +331,11 @@ export function useChat() {
           'Content-Type': 'application/json',
           ...(token.value ? { Authorization: `Bearer ${token.value}` } : {}),
         },
-        body: JSON.stringify(selectedModel.value ? { content: trimmed, model: selectedModel.value } : { content: trimmed }),
+        body: JSON.stringify(
+          selectedModel.value
+            ? { content: trimmed, model: selectedModel.value, images }
+            : { content: trimmed, images }
+        ),
       })
 
       if (!response.ok || !response.headers.get('content-type')?.includes('text/event-stream')) {

@@ -46,6 +46,7 @@ function toggle() {
               : 'Sign in to reach your conversations.'
           }}
         </p>
+        <ThemeToggle class="theme" />
       </header>
 
       <ErrorBanner v-if="error" :error="error" class="auth-error" @dismiss="clear" />
@@ -133,6 +134,18 @@ header p {
   margin: 0;
   color: var(--text-muted);
   font-size: 14px;
+}
+
+/* Pinned to the top right of the card so the theme can be changed
+   before signing in, not only once a conversation is on screen. */
+header .theme {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+}
+
+.card {
+  position: relative;
 }
 
 .switch {

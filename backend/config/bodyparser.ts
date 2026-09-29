@@ -33,6 +33,13 @@ const bodyParserConfig = defineConfig({
     convertEmptyStringsToNull: true,
 
     /**
+     * Maximum accepted payload size. Images travel as base64 inside the
+     * JSON body, so the default 1mb limit would reject anything useful.
+     * 25mb covers a handful of 6 MB images plus the message text.
+     */
+    limit: '25mb',
+
+    /**
      * Content types handled by the JSON parser.
      */
     types: [

@@ -35,6 +35,13 @@ export default await Env.create(new URL('../', import.meta.url), {
   GEMINI_API_KEY: Env.schema.string(),
   GEMINI_MODEL: Env.schema.string(),
 
+  /**
+   * Where uploaded PDFs are kept. Relative paths resolve against the
+   * backend directory, so the default keeps them out of version control
+   * without anyone having to configure anything. Ignored by .gitignore.
+   */
+  ATTACHMENT_STORAGE_PATH: Env.schema.string.optional(),
+
   // CORS
   CORS_ORIGIN: Env.schema.string.optional(),
 })

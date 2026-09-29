@@ -1,7 +1,19 @@
 /* ------------------------------------------------------------------
    Design tokens
+
+   Every colour in the app comes from one of the names below, so adding
+   a palette means adding a block here and changing nothing else.
+
+   The dark palette is the default and sits on a bare ":root", which
+   keeps the current look when no theme attribute is present at all. The
+   light palette redefines the exact same names under a
+   "[data-theme='light']" attribute that "useTheme" writes onto <html>.
    ------------------------------------------------------------------ */
 :root {
+  /* Tells the browser to render native widgets, scrollbars and form
+     controls for this palette instead of the operating system default. */
+  color-scheme: dark;
+
   --bg: #0e1014;
   --bg-elevated: #161a21;
   --bg-raised: #1d222b;
@@ -11,19 +23,56 @@
 
   --text: #e6e9ef;
   --text-muted: #98a2b3;
-  --text-faint: #6b7484;
+  --text-faint: #7d8798;
 
   --accent: #6d8cff;
   --accent-strong: #8aa4ff;
   --accent-soft: rgba(109, 140, 255, 0.14);
+  --accent-border: rgba(109, 140, 255, 0.3);
+  /* Text drawn on top of a solid --accent surface, e.g. the Send button. */
+  --accent-fg: #0b0e14;
 
   --danger: #f2777a;
   --danger-soft: rgba(242, 119, 122, 0.12);
+  --danger-border: rgba(242, 119, 122, 0.35);
+
+  --shadow-color: rgba(0, 0, 0, 0.28);
 
   --radius: 10px;
   --radius-lg: 14px;
 
   --sidebar-width: 288px;
+}
+
+:root[data-theme='light'] {
+  color-scheme: light;
+
+  /* Elevation runs the other way in light mode: a higher surface is
+     whiter, so buttons and the sidebar still separate from the page. */
+  --bg: #eef0f4;
+  --bg-elevated: #f8f9fb;
+  --bg-raised: #ffffff;
+  --bg-hover: #e8ebf1;
+  --border: #dfe3ea;
+  --border-strong: #c3c9d4;
+
+  --text: #141821;
+  --text-muted: #5b6472;
+  --text-faint: #6e7788;
+
+  /* A darker accent than the dark palette uses: the light one sits on
+     white, where the pale blue would not clear the contrast minimum. */
+  --accent: #3a5ccc;
+  --accent-strong: #2b48a8;
+  --accent-soft: rgba(58, 92, 204, 0.1);
+  --accent-border: rgba(58, 92, 204, 0.28);
+  --accent-fg: #ffffff;
+
+  --danger: #cc2f36;
+  --danger-soft: rgba(204, 47, 54, 0.1);
+  --danger-border: rgba(204, 47, 54, 0.32);
+
+  --shadow-color: rgba(20, 24, 33, 0.1);
 }
 
 * {
@@ -90,7 +139,7 @@ select {
 .btn-primary {
   background: var(--accent);
   border-color: var(--accent);
-  color: #0b0e14;
+  color: var(--accent-fg);
   font-weight: 600;
 }
 
@@ -109,6 +158,29 @@ select {
 .btn-ghost:hover:not(:disabled) {
   background: var(--bg-hover);
   color: var(--text);
+}
+
+/* Light/dark switch. Both icons are kept in the DOM and a global rule
+   picks one from the data-theme attribute on <html>, so a scoped style
+   (which would otherwise have to fight this selector) is not involved. */
+.theme-toggle {
+  line-height: 1;
+}
+
+.theme-toggle .to-dark {
+  display: none;
+}
+
+:root:not([data-theme='light']) .theme-toggle .to-light {
+  display: block;
+}
+
+:root[data-theme='light'] .theme-toggle .to-light {
+  display: none;
+}
+
+:root[data-theme='light'] .theme-toggle .to-dark {
+  display: block;
 }
 
 .btn-block {
@@ -148,7 +220,7 @@ select {
 .alert {
   padding: 10px 12px;
   border-radius: var(--radius);
-  border: 1px solid rgba(242, 119, 122, 0.35);
+  border: 1px solid var(--danger-border);
   background: var(--danger-soft);
   color: var(--danger);
   font-size: 14px;

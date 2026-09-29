@@ -8,7 +8,8 @@ import Conversation from '#models/conversation'
 import Message from '#models/message'
 import GeminiService from '#services/gemini_service'
 import MessageTransformer from '#transformers/message_transformer'
-import { storeMessageValidator } from '#validators/message'
+import { storeMessageValidator, MAX_IMAGE_DATA_LENGTH } from '#validators/message'
+import type { ImageAttachment } from '#services/gemini_service'
 import type User from '#models/user'
 
 /**
@@ -56,13 +57,37 @@ type PreparedTurn = {
 async function prepareTurn(
   user: User,
   conversationId: string,
-  payload: { content: string; model?: string },
+  payload: { content?: string; model?: string; images?: ImageAttachment[] },
   gemini: GeminiService
 ): Promise<PreparedTurn> {
   const conversation = await findOwnedConversation(user.id, conversationId)
   await conversation.load('messages', (query) => query.orderBy('id', 'asc'))
 
   const history = [...conversation.messages]
+
+  /**
+   * Content is optional so an image only message is allowed, but a turn
+   * that has neither text nor an image is a mistake and gets refused.
+   * The combined base64 budget is also checked here, because the body
+   * parser limit is about the whole request while this bounds what the
+   * model is asked to look at.
+   */
+  const images = payload.images ?? []
+  const combined = images.reduce((total, image) => total + image.data.length, 0)
+
+  if (!payload.content?.trim() && images.length === 0) {
+    throw new Exception('A message needs some text or an image', {
+      status: 422,
+      code: 'E_EMPTY_TURN',
+    })
+  }
+
+  if (combined > MAX_IMAGE_DATA_LENGTH * 3) {
+    throw new Exception('The attached images are too large', {
+      status: 413,
+      code: 'E_IMAGES_TOO_LARGE',
+    })
+  }
 
   /**
    * The default is resolved against the models this key can actually
@@ -88,7 +113,13 @@ async function prepareTurn(
  */
 async function persistTurn(
   turn: PreparedTurn,
-  options: { content: string; reply: string; model: string; userMessage?: Message }
+  options: {
+    content: string
+    reply: string
+    model: string
+    images?: ImageAttachment[]
+    userMessage?: Message
+  }
 ): Promise<{ userMessage: Message; assistantMessage: Message }> {
   const { conversation } = turn
 
@@ -100,6 +131,7 @@ async function persistTurn(
           conversationId: conversation.id,
           role: 'user',
           content: options.content,
+          images: options.images ?? [],
         },
         { client: trx }
       ))
@@ -120,7 +152,7 @@ async function persistTurn(
      * service had to fail over, so the resolved value is stored.
      */
     if (turn.isFirstTurn && conversation.title === DEFAULT_CONVERSATION_TITLE) {
-      conversation.title = options.content.slice(0, 60)
+      conversation.title = options.content.trim().slice(0, 60) || 'Shared an image'
     }
     conversation.model = options.model
     conversation.useTransaction(trx)
@@ -158,14 +190,16 @@ export default class MessagesController {
      */
     const reply = await gemini.generateReply({
       model: turn.model,
-      prompt: payload.content,
+      prompt: payload.content ?? '',
       history: turn.history,
+      images: payload.images,
     })
 
     const { userMessage, assistantMessage } = await persistTurn(turn, {
-      content: payload.content,
+      content: payload.content ?? '',
       reply: reply.text,
       model: reply.model,
+      images: payload.images,
     })
 
     /**
@@ -211,7 +245,8 @@ export default class MessagesController {
     const userMessage = await Message.create({
       conversationId: turn.conversation.id,
       role: 'user',
-      content: payload.content,
+      content: payload.content ?? '',
+      images: payload.images ?? [],
     })
 
     const events = (async function* () {
@@ -227,8 +262,9 @@ export default class MessagesController {
          */
         const opened = await gemini.openStream({
           model: turn.model,
-          prompt: payload.content,
+          prompt: payload.content ?? '',
           history: turn.history,
+          images: payload.images,
         })
         resolvedModel = opened.model
 
@@ -238,7 +274,7 @@ export default class MessagesController {
         }
 
         const { assistantMessage } = await persistTurn(turn, {
-          content: payload.content,
+          content: payload.content ?? '',
           reply: full.trim(),
           userMessage,
           model: resolvedModel,

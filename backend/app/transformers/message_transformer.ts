@@ -8,6 +8,7 @@ export default class MessageTransformer extends BaseTransformer<Message> {
       conversationId: this.resource.conversationId,
       role: this.resource.role,
       content: this.resource.content,
+      images: this.resource.images ?? [],
       createdAt: this.resource.createdAt,
     }
   }

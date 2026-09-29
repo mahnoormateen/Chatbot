@@ -60,7 +60,7 @@ const emit = defineEmits<{ dismiss: []; retry: [] }>()
   gap: 10px;
   padding: 11px 12px;
   border-radius: var(--radius);
-  border: 1px solid rgba(242, 119, 122, 0.35);
+  border: 1px solid var(--danger-border);
   background: var(--danger-soft);
   color: var(--danger);
   font-size: 13.5px;
