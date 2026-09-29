@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { MessageImage, PdfInput } from '~/types/api'
+import type { ApiModel, MessageImage, PdfInput } from '~/types/api'
 import type { SendPhase } from '~/composables/useChat'
 
 const props = defineProps<{
@@ -8,11 +8,23 @@ const props = defineProps<{
   phase?: SendPhase
   /** Named in the status line so it is clear what is being waited on. */
   model?: string
+  /** The model list lives here so the dropdown sits next to Send. */
+  models: ApiModel[]
+  /** The model currently selected, mirroring useChat.selectedModel. */
+  modelValue: string
+  /** Shown in the dropdown while the model list is still loading. */
+  loadingModels?: boolean
 }>()
 
 const emit = defineEmits<{
   send: [content: string, images?: MessageImage[], pdfs?: PdfInput[]]
+  'update:modelValue': [value: string]
 }>()
+
+const selectedModel = computed({
+  get: () => props.modelValue,
+  set: (value: string) => emit('update:modelValue', value),
+})
 
 /**
  * A file staged in the composer, not sent yet. "data" is the base64
@@ -466,10 +478,19 @@ onMounted(autoGrow)
         <span v-else class="hint">Enter to send | Shift+Enter for a new line | paste or drop files</span>
       </div>
 
-      <button class="btn btn-primary send" type="submit" :disabled="!canSend">
-        <span v-if="props.sending" class="spinner" aria-hidden="true" />
-        <span v-else>Send</span>
-      </button>
+      <div class="bar-end">
+        <ModelPicker
+          v-model="selectedModel"
+          :models="props.models"
+          :disabled="props.sending"
+          :loading="props.loadingModels"
+        />
+
+        <button class="btn btn-primary send" type="submit" :disabled="!canSend">
+          <span v-if="props.sending" class="spinner" aria-hidden="true" />
+          <span v-else>Send</span>
+        </button>
+      </div>
     </div>
   </form>
 </template>
@@ -535,6 +556,13 @@ onMounted(autoGrow)
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+}
+
+/* Model dropdown + Send, grouped at the right end of the composer bar. */
+.bar-end {
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
 .bar-actions {
@@ -712,6 +740,11 @@ onMounted(autoGrow)
 @media (max-width: 640px) {
   .hint {
     display: none;
+  }
+
+  /* Keep the dropdown and Send side by side on phones. */
+  .bar-end :deep(select) {
+    max-width: 130px;
   }
 }
 </style>

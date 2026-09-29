@@ -235,13 +235,6 @@ function onPrompt(prompt: string) {
 
         <h1 class="heading">{{ activeConversation?.title ?? 'New conversation' }}</h1>
 
-        <ModelPicker
-          v-model="selectedModel"
-          :models="models"
-          :disabled="sending"
-          :loading="loadingModels"
-        />
-
         <ThemeToggle />
 
         <div class="account">
@@ -294,9 +287,12 @@ function onPrompt(prompt: string) {
         />
 
         <ChatComposer
+          v-model="selectedModel"
           :sending="sending"
           :phase="sendPhase"
           :model="activeModelName"
+          :models="models"
+          :loading-models="loadingModels"
           @send="sendMessage"
         />
       </footer>
