@@ -4,7 +4,6 @@ import type { ApiModel } from '~/types/api'
 
 const props = defineProps<{
   models: ApiModel[]
-  /** The model currently selected, mirroring useChat.selectedModel. */
   modelValue: string
   loading?: boolean
   disabled?: boolean
@@ -17,12 +16,6 @@ const model = computed({
   set: (value: string) => emit('update:modelValue', value),
 })
 
-/**
- * A model the backend reported as quota limited is still offered, but
- * marked: it answers, it just answers slowly and may fail with a 429
- * until the quota resets. The label is written into the row so the
- * reason is readable rather than being carried by a colour alone.
- */
 const items = computed<SelectMenuItem[]>(() =>
   props.models.map((entry) => ({
     label: entry.displayName,
@@ -33,11 +26,6 @@ const items = computed<SelectMenuItem[]>(() =>
   }))
 )
 
-/**
- * The list arrives over several requests, so the current value is added
- * back if it is not in it yet. Without this the trigger would read as
- * empty in the window between the first response and the full list.
- */
 const shownItems = computed<SelectMenuItem[]>(() => {
   const current = model.value
   const exists = items.value.some((item) => {
@@ -48,7 +36,6 @@ const shownItems = computed<SelectMenuItem[]>(() => {
   return [{ label: current, value: String(current) }, ...items.value]
 })
 
-/** Shown on the closed trigger, so a long display name is still legible. */
 const selectedLabel = computed(
   () => props.models.find((entry) => entry.id === model.value)?.displayName ?? model.value
 )
@@ -65,7 +52,6 @@ const selectedLabel = computed(
     variant="ghost"
     color="neutral"
     icon="i-lucide-chevron-down"
-    trailing-icon="i-lucide-search"
     :content="{ align: 'start', side: 'top', sideOffset: 8 }"
     class="data-[state=open]:bg-elevated font-medium"
     :ui="{ base: 'data-[state=open]:ring-0 data-[state=open]:bg-transparent' }"

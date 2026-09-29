@@ -40,7 +40,6 @@ const {
 
 /** False until the stored token has been validated, avoids a login flash. */
 const ready = ref(false)
-const showSidebar = ref(true)
 
 /**
  * The transcript in the shape the chat components expect. The conversion
@@ -83,11 +82,6 @@ watch(isAuthenticated, (signedIn, wasSignedIn) => {
   if (signedIn && !wasSignedIn) loadEverything()
 })
 
-async function onCreate() {
-  await createConversation()
-  if (window.innerWidth <= 760) showSidebar.value = false
-}
-
 async function signOut() {
   await logout()
 
@@ -106,51 +100,35 @@ function onPrompt(prompt: string) {
 </script>
 
 <template>
-  <div v-if="!ready" class="boot">
-    <span class="spinner" aria-hidden="true" />
-  </div>
+  <UDashboardPanel
+    id="chat"
+    class="relative min-h-0"
+    :ui="{ body: 'p-0 sm:p-0 overscroll-none' }"
+  >
+    <template #header>
+      <Navbar>
+        <template #title>
+          <h1 class="text-sm font-medium text-highlighted truncate min-w-0 max-w-3xs">
+            {{ activeConversation?.title ?? 'New conversation' }}
+          </h1>
+        </template>
 
-  <AuthPanel v-else-if="!isAuthenticated" />
-
-  <div v-else class="layout">
-    <ChatSidebar
-      v-show="showSidebar"
-      :conversations="conversations"
-      :active-id="activeId"
-      :loading="loadingConversations"
-      :user-name="user?.fullName || user?.email || 'Signed in'"
-      :user-initials="user?.initials || ''"
-      :user-email="user?.email || ''"
-      @select="openConversation"
-      @create="onCreate"
-      @remove="deleteConversation"
-      @rename="renameConversation"
-      @signout="signOut"
-    />
-
-    <main class="main">
-      <header class="topbar">
-        <UButton
-          icon="i-lucide-panel-left"
-          color="neutral"
-          variant="ghost"
-          size="sm"
-          square
-          :aria-expanded="showSidebar"
-          :aria-label="showSidebar ? 'Hide conversation list' : 'Show conversation list'"
-          @click="showSidebar = !showSidebar"
+        <ModelSelect
+          :models="models"
+          :model-value="selectedModel"
+          :loading="loadingModels"
+          :disabled="sending"
+          @update:model-value="selectedModel = $event"
         />
+      </Navbar>
+    </template>
 
-        <h1 class="heading">{{ activeConversation?.title ?? 'New conversation' }}</h1>
-
-        <ThemeToggle />
-      </header>
-
-      <div class="transcript">
-        <div v-if="loadingMessages" class="skeletons" aria-hidden="true">
-          <USkeleton class="mb-1 h-7 w-full rounded-lg" />
-          <USkeleton class="mb-1 h-7 w-2/3 rounded-lg" />
-          <USkeleton class="mb-1 h-7 w-1/2 rounded-lg" />
+    <template #body>
+      <UContainer class="flex-1 flex flex-col gap-4 sm:gap-6">
+        <div v-if="loadingMessages" class="flex flex-col gap-4 p-6">
+          <USkeleton class="h-7 w-full rounded-lg" />
+          <USkeleton class="h-7 w-2/3 rounded-lg" />
+          <USkeleton class="h-7 w-1/2 rounded-lg" />
         </div>
 
         <ChatWelcome v-else-if="!hasMessages" @send="onPrompt" />
@@ -162,113 +140,33 @@ function onPrompt(prompt: string) {
           :model-name="activeModelName"
           :user-initials="user?.initials"
         />
-      </div>
 
-      <footer class="composer-wrap">
-        <ErrorBanner
-          v-if="error"
-          :error="error"
-          :retryable="error.retryable && canRetry"
-          @dismiss="clearError"
-          @retry="retryLastMessage"
-        />
+        <footer class="sticky bottom-0 z-10 px-4 pb-4 sm:px-6 sm:pb-6">
+          <ErrorBanner
+            v-if="error"
+            :error="error"
+            :retryable="error.retryable && canRetry"
+            class="mb-3"
+            @dismiss="clearError"
+            @retry="retryLastMessage"
+          />
 
-        <ChatComposer
-          v-model="selectedModel"
-          :sending="sending"
-          :status="status"
-          :phase="sendPhase"
-          :model="activeModelName"
-          :models="models"
-          :loading-models="loadingModels"
-          @send="sendMessage"
-        />
-      </footer>
-    </main>
-  </div>
+          <ChatComposer
+            v-model="selectedModel"
+            :sending="sending"
+            :status="status"
+            :phase="sendPhase"
+            :model="activeModelName"
+            :models="models"
+            :loading-models="loadingModels"
+            @send="sendMessage"
+          />
+        </footer>
+      </UContainer>
+    </template>
+  </UDashboardPanel>
 </template>
 
 <style scoped>
-.boot {
-  min-height: 100vh;
-  display: grid;
-  place-items: center;
-  color: var(--ui-text-dimmed);
-}
-
-.layout {
-  display: flex;
-  height: 100vh;
-  overflow: hidden;
-}
-
-.main {
-  flex: 1;
-  min-width: 0;
-  position: relative;
-  display: flex;
-  flex-direction: column;
-}
-
-.topbar {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 18px;
-  border-bottom: 1px solid var(--ui-border);
-  background: var(--ui-bg-elevated);
-}
-
-.heading {
-  flex: 1;
-  min-width: 0;
-  margin: 0;
-  font-size: 15px;
-  font-weight: 600;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.transcript {
-  flex: 1;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-}
-
-.skeletons {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 22px 18px;
-}
-
-/*
- * The prompt used to sit on an opaque band with a hard top border, which
- * in the light palette read as a white strip bolted under the transcript.
- * It now has no background of its own: the composer card provides the only
- * surface, and the padding around it is plain page. The gradient above
- * dissolves the transcript into that padding, so messages scroll away
- * instead of being cut off by a line.
- */
-.composer-wrap {
-  position: relative;
-  padding: 10px 18px 18px;
-}
-
-.composer-wrap::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 100%;
-  height: 30px;
-  background: linear-gradient(to top, var(--ui-bg), transparent);
-  pointer-events: none;
-}
-
-.composer-wrap :deep(.alert) {
-  margin-bottom: 10px;
-}
+/* Panel body handles its own padding; the container inside provides it. */
 </style>
