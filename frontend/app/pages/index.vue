@@ -6,8 +6,10 @@
  * runtimeConfig.public.apiBase. The Gemini API key stays on the server:
  * this app has no knowledge of it and never sends one.
  */
-import { toUiMessages } from '~/utils/uiMessages'
+import { useAuth } from '~/composables/useAuth'
+import { useChat } from '~/composables/useChat'
 
+/** False until the stored token has been validated, avoids a login flash. */
 const { user, isAuthenticated, logout, refresh } = useAuth()
 
 const {
@@ -40,13 +42,6 @@ const {
 
 /** False until the stored token has been validated, avoids a login flash. */
 const ready = ref(false)
-
-/**
- * The transcript in the shape the chat components expect. The conversion
- * is cheap and only runs when the message list changes, so the streaming
- * path is not paying for it on every chunk.
- */
-const uiMessages = computed(() => toUiMessages(messages.value))
 
 async function loadEverything() {
   await Promise.all([loadConversations(), loadModels()])
@@ -84,9 +79,6 @@ watch(isAuthenticated, (signedIn, wasSignedIn) => {
 
 async function signOut() {
   await logout()
-
-  // Drop the transcript too, so the next person to sign in on this
-  // browser never sees the previous conversation.
   reset()
 }
 
@@ -131,15 +123,52 @@ function onPrompt(prompt: string) {
           <USkeleton class="h-7 w-1/2 rounded-lg" />
         </div>
 
-        <ChatWelcome v-else-if="!hasMessages" @send="onPrompt" />
+        <div v-else-if="!hasMessages">
+          <p class="text-sm text-muted opacity-60">
+            Start a conversation by sending a message below.
+          </p>
+        </div>
 
-        <ChatTranscript
+        <UChatMessages
           v-else
-          :messages="uiMessages"
+          :messages="messages"
           :status="status"
           :model-name="activeModelName"
           :user-initials="user?.initials"
-        />
+        >
+          <template #content="{ message }">
+            <template v-for="(part, index) in message.parts" :key="`${message.id}-${part.type}-${index}`">
+              <template v-if="part.type === 'text'">
+                <p
+                  v-if="message.role === 'assistant'"
+                  class="prose max-w-none break-normal"
+                >
+                  {{ part.text }}
+                </p>
+                <p
+                  v-if="message.role === 'user'"
+                  class="whitespace-pre-wrap text-right text-secondary"
+                >
+                  {{ part.text }}
+                </p>
+              </template>
+
+              <template v-else-if="part.type === 'file'">
+                <UFilePreview
+                  :name="part.filename ?? 'document'"
+                  :type="part.mediaType"
+                  :preview-url="part.url"
+                  :size="part.size"
+                  removable
+                />
+              </template>
+
+              <template v-else-if="part.type === 'reasoning'">
+                <p class="text-xs text-muted opacity-50">{{ part.text }}</p>
+              </template>
+            </template>
+          </template>
+        </UChatMessages>
 
         <footer class="sticky bottom-0 z-10 px-4 pb-4 sm:px-6 sm:pb-6">
           <ErrorBanner
@@ -151,7 +180,7 @@ function onPrompt(prompt: string) {
             @retry="retryLastMessage"
           />
 
-          <ChatComposer
+          <UChatPrompt
             v-model="selectedModel"
             :sending="sending"
             :status="status"
