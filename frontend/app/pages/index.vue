@@ -215,10 +215,14 @@ function onPrompt(prompt: string) {
       :conversations="conversations"
       :active-id="activeId"
       :loading="loadingConversations"
+      :user-name="user?.fullName || user?.email || 'Signed in'"
+      :user-initials="user?.initials || ''"
+      :user-email="user?.email || ''"
       @select="openConversation"
       @create="onCreate"
       @remove="deleteConversation"
       @rename="renameConversation"
+      @signout="signOut"
     />
 
     <main class="main">
@@ -236,12 +240,6 @@ function onPrompt(prompt: string) {
         <h1 class="heading">{{ activeConversation?.title ?? 'New conversation' }}</h1>
 
         <ThemeToggle />
-
-        <div class="account">
-          <span class="account-avatar" aria-hidden="true">{{ user?.initials }}</span>
-          <span class="name">{{ user?.fullName || user?.email }}</span>
-          <button class="btn-ghost" type="button" @click="signOut">Sign out</button>
-        </div>
       </header>
 
       <div ref="transcript" class="transcript" @scroll="onTranscriptScroll">
@@ -347,34 +345,6 @@ function onPrompt(prompt: string) {
   text-overflow: ellipsis;
 }
 
-.account {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 13px;
-  color: var(--text-muted);
-}
-
-.account-avatar {
-  display: grid;
-  place-items: center;
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  background: var(--accent-soft);
-  color: var(--accent-strong);
-  font-size: 11.5px;
-  font-weight: 700;
-  text-transform: uppercase;
-}
-
-.name {
-  max-width: 160px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
 .transcript {
   flex: 1;
   overflow-y: auto;
@@ -434,10 +404,28 @@ function onPrompt(prompt: string) {
   transform: translateY(-2px);
 }
 
+/*
+ * The prompt used to sit on an opaque band with a hard top border, which
+ * in the light palette read as a white strip bolted under the transcript.
+ * It now has no background of its own: the composer card provides the only
+ * surface, and the padding around it is plain page. The gradient above
+ * dissolves the transcript into that padding, so messages scroll away
+ * instead of being cut off by a line.
+ */
 .composer-wrap {
-  padding: 12px 18px 16px;
-  border-top: 1px solid var(--border);
-  background: var(--bg-elevated);
+  position: relative;
+  padding: 10px 18px 18px;
+}
+
+.composer-wrap::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 100%;
+  height: 30px;
+  background: linear-gradient(to top, var(--bg), transparent);
+  pointer-events: none;
 }
 
 .composer-wrap .alert {
@@ -452,12 +440,6 @@ function onPrompt(prompt: string) {
   to {
     opacity: 1;
     transform: translateY(0);
-  }
-}
-
-@media (max-width: 760px) {
-  .name {
-    display: none;
   }
 }
 </style>

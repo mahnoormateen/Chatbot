@@ -496,22 +496,35 @@ onMounted(autoGrow)
 </template>
 
 <style scoped>
+/*
+ * The composer is the one raised surface in the column. It is drawn on a
+ * slightly lighter token than the page so it reads as a card floating over
+ * the transcript without needing a coloured band behind it, which is what
+ * made the area look washed out in the light palette.
+ */
 .composer {
   position: relative;
   display: flex;
   flex-direction: column;
   gap: 10px;
-  padding: 12px;
-  border-radius: var(--radius-lg);
+  padding: 12px 14px;
+  border-radius: 18px;
   border: 1px solid var(--border);
-  background: var(--bg);
-  box-shadow: 0 8px 30px var(--shadow-color);
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  background: var(--bg-elevated);
+  /* A hairline highlight along the top edge plus a soft drop shadow, which
+     is what makes the card read as raised in both palettes. */
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    0 10px 34px var(--shadow-color);
+  transition: border-color 0.18s ease, box-shadow 0.18s ease;
 }
 
 .composer:focus-within {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-soft), 0 8px 30px var(--shadow-color);
+  border-color: var(--accent-border);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 0 0 3px var(--accent-soft),
+    0 14px 40px var(--shadow-color);
 }
 
 .composer.dragging {
@@ -529,9 +542,9 @@ onMounted(autoGrow)
   align-items: center;
   justify-content: center;
   gap: 8px;
-  border-radius: var(--radius-lg);
+  border-radius: 18px;
   border: 2px dashed var(--accent);
-  background: color-mix(in srgb, var(--bg) 88%, var(--accent) 12%);
+  background: color-mix(in srgb, var(--bg-elevated) 88%, var(--accent) 12%);
   color: var(--accent-strong);
   font-size: 14px;
   font-weight: 500;
@@ -733,8 +746,16 @@ onMounted(autoGrow)
   color: var(--danger);
 }
 
+/* Pill shaped so it reads as the primary action of the card. */
 .send {
-  min-width: 84px;
+  min-width: 88px;
+  border-radius: 999px;
+  box-shadow: 0 4px 16px var(--accent-border);
+  transition: background 0.15s ease, transform 0.15s ease;
+}
+
+.send:hover:not(:disabled) {
+  transform: translateY(-1px);
 }
 
 @media (max-width: 640px) {

@@ -6,6 +6,12 @@ const props = defineProps<{
   conversations: ApiConversation[]
   activeId: number | null
   loading: boolean
+  /** Name shown on the account row pinned to the bottom of the list. */
+  userName: string
+  /** Two letter monogram drawn in the account avatar. */
+  userInitials: string
+  /** Secondary line, so an account is identifiable at a glance. */
+  userEmail: string
 }>()
 
 const emit = defineEmits<{
@@ -13,11 +19,63 @@ const emit = defineEmits<{
   create: []
   remove: [id: number]
   rename: [id: number, title: string]
+  signout: []
 }>()
 
 const editingId = ref<number | null>(null)
 const draftTitle = ref('')
 const renameInput = ref<HTMLInputElement | null>(null)
+
+/** Whether the account menu is expanded. */
+const accountOpen = ref(false)
+const accountRoot = ref<HTMLElement | null>(null)
+const accountTrigger = ref<HTMLButtonElement | null>(null)
+
+function toggleAccount() {
+  accountOpen.value = !accountOpen.value
+}
+
+/** Closes the menu, returning focus to the trigger when it had focus. */
+function closeAccount(restoreFocus = false) {
+  if (!accountOpen.value) return
+  accountOpen.value = false
+  if (restoreFocus) accountTrigger.value?.focus()
+}
+
+function signOut() {
+  closeAccount()
+  emit('signout')
+}
+
+/**
+ * A click anywhere outside the account row dismisses the menu. Pointer down
+ * is used rather than click so the menu is already gone by the time the
+ * click lands on whatever was underneath, which stops a tap on a
+ * conversation from both selecting it and reopening the menu.
+ */
+function onDocumentPointerDown(event: PointerEvent) {
+  if (!accountOpen.value) return
+  if (accountRoot.value?.contains(event.target as Node)) return
+  closeAccount()
+}
+
+/** Escape closes the menu and hands focus back to the trigger. */
+function onDocumentKeydown(event: KeyboardEvent) {
+  if (accountOpen.value && event.key === 'Escape') {
+    event.stopPropagation()
+    closeAccount(true)
+  }
+}
+
+onMounted(() => {
+  document.addEventListener('pointerdown', onDocumentPointerDown)
+  document.addEventListener('keydown', onDocumentKeydown)
+})
+
+onBeforeUnmount(() => {
+  document.removeEventListener('pointerdown', onDocumentPointerDown)
+  document.removeEventListener('keydown', onDocumentKeydown)
+})
 
 /** Free text search over the conversation titles. */
 const query = ref('')
@@ -276,6 +334,72 @@ const groups = computed<ConversationGroup[]>(() => {
       </template>
     </nav>
 
+    <!--
+      The account sits at the foot of the list rather than in the top bar,
+      next to the content it belongs to. Its menu opens upwards because
+      that is the only free space in a column filling the viewport.
+    -->
+    <div ref="accountRoot" class="account">
+      <button
+        ref="accountTrigger"
+        class="account-trigger"
+        type="button"
+        :aria-expanded="accountOpen"
+        aria-haspopup="true"
+        aria-controls="account-popup"
+        @click="toggleAccount"
+      >
+        <span class="account-avatar" aria-hidden="true">{{ props.userInitials }}</span>
+
+        <span class="account-text">
+          <span class="account-name">{{ props.userName }}</span>
+          <span class="account-email">{{ props.userEmail }}</span>
+        </span>
+
+        <svg
+          class="account-chevron"
+          :class="{ open: accountOpen }"
+          viewBox="0 0 24 24"
+          width="14"
+          height="14"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2.2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+        >
+          <polyline points="18 15 12 9 6 15" />
+        </svg>
+      </button>
+
+      <!--
+        A plain popup rather than role="menu": the trigger keeps focus and
+        Tab walks into it, so claiming menu semantics would promise arrow
+        key navigation that is not implemented.
+      -->
+      <div v-if="accountOpen" id="account-popup" class="account-menu">
+        <button class="account-item" type="button" @click="signOut">
+          <svg
+            viewBox="0 0 24 24"
+            width="15"
+            height="15"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+            <polyline points="16 17 21 12 16 7" />
+            <line x1="21" y1="12" x2="9" y2="12" />
+          </svg>
+          <span>Sign out</span>
+        </button>
+      </div>
+    </div>
+
     <Teleport to="body">
       <div
         v-if="confirmDelete"
@@ -468,6 +592,133 @@ ul.flat {
   background: var(--bg);
   outline: none;
   font-size: 14px;
+}
+
+/* ------------------------------------------------------------------
+   Account row, pinned to the foot of the list
+   ------------------------------------------------------------------ */
+.account {
+  position: relative;
+  flex: none;
+  /* Only a hairline separates it from the list, so the row reads as part
+     of the same column rather than as a second panel. */
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+
+.account-trigger {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px;
+  border-radius: var(--radius);
+  text-align: left;
+  transition: background 0.15s ease;
+}
+
+.account-trigger:hover,
+.account-trigger[aria-expanded='true'] {
+  background: var(--bg-hover);
+}
+
+.account-avatar {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  border: 1px solid var(--accent-border);
+  color: var(--accent-strong);
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+/* The name and email share a column and take the space left by the avatar. */
+.account-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.account-name,
+.account-email {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.account-name {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.account-email {
+  font-size: 11.5px;
+  color: var(--text-faint);
+}
+
+.account-chevron {
+  flex: none;
+  color: var(--text-faint);
+  transition: transform 0.18s ease, color 0.15s ease;
+}
+
+.account-chevron.open {
+  transform: rotate(180deg);
+  color: var(--text-muted);
+}
+
+/* Opens upward, anchored to the bottom of the row so it never covers the
+   name it was opened from. */
+.account-menu {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: calc(100% - 2px);
+  z-index: 20;
+  padding: 4px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border-strong);
+  background: var(--bg-raised);
+  box-shadow: 0 14px 38px var(--shadow-color);
+  animation: account-in 0.14s ease both;
+}
+
+.account-item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 7px;
+  font-size: 13.5px;
+  color: var(--text-muted);
+  text-align: left;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.account-item:hover {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+@keyframes account-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 
 /* Delete confirmation dialog, shown over the whole app. */
