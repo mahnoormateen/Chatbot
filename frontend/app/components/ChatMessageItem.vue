@@ -2,7 +2,11 @@
 import type { ApiAttachment, MessageImage } from '~/types/api'
 import type { ChatMessage } from '~/composables/useChat'
 
-const props = defineProps<{ message: ChatMessage }>()
+const props = defineProps<{
+  message: ChatMessage
+  /** Shown inside the user avatar, taken from the signed in account. */
+  userInitials?: string
+}>()
 
 const copied = ref(false)
 
@@ -84,6 +88,9 @@ const time = computed(() => {
     : value.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
 })
 
+/** Replies render as markdown; questions stay plain with line breaks. */
+const isAssistant = computed(() => props.message.role === 'assistant')
+
 async function copy() {
   try {
     await navigator.clipboard.writeText(props.message.content)
@@ -97,6 +104,22 @@ async function copy() {
 
 <template>
   <article class="message" :class="props.message.role">
+    <div class="avatar" :class="props.message.role" aria-hidden="true">
+      <template v-if="isAssistant">
+        <!-- Four-point sparkle standing for Gemini. -->
+        <svg
+          viewBox="0 0 24 24"
+          width="16"
+          height="16"
+          fill="currentColor"
+          stroke="none"
+        >
+          <path d="M12 2c.6 5.4 4.6 9.4 10 10-5.4.6-9.4 4.6-10 10-.6-5.4-4.6-9.4-10-10 5.4-.6 9.4-4.6 10-10Z" />
+        </svg>
+      </template>
+      <span v-else>{{ userInitials || '·' }}</span>
+    </div>
+
     <div class="bubble">
       <div v-if="messageImages.length" class="images">
         <img
@@ -130,9 +153,13 @@ async function copy() {
         <span /><span /><span />
       </div>
 
-      <p v-else class="content">
-        {{ props.message.content }}<span v-if="isStreaming" class="caret" aria-hidden="true" />
-      </p>
+      <div v-else class="body">
+        <ChatRichText v-if="isAssistant && props.message.content" :text="props.message.content" />
+        <p v-else class="content">
+          {{ props.message.content }}<span v-if="isStreaming" class="caret" aria-hidden="true" />
+        </p>
+        <span v-if="isStreaming && isAssistant" class="caret block" aria-hidden="true" />
+      </div>
 
       <footer v-if="!isWaiting">
         <time :datetime="props.message.createdAt">{{ time }}</time>
@@ -153,14 +180,38 @@ async function copy() {
 <style scoped>
 .message {
   display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  animation: message-in 0.22s ease both;
 }
 
 .message.user {
-  justify-content: flex-end;
+  flex-direction: row-reverse;
+}
+
+/* The author mark: initials for the user, a sparkle for the assistant. */
+.avatar {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--accent-fg);
+  background: var(--accent);
+}
+
+.message.assistant .avatar {
+  background: var(--accent-soft);
+  border: 1px solid var(--accent-border);
+  color: var(--accent-strong);
 }
 
 .bubble {
-  max-width: min(760px, 82%);
+  max-width: min(720px, calc(100% - 58px));
   padding: 12px 15px;
   border-radius: var(--radius-lg);
   border: 1px solid var(--border);
@@ -172,11 +223,26 @@ async function copy() {
   border-color: var(--accent-border);
 }
 
+/* Assistant bubbles sit flush against their avatar; user bubbles point
+   away, giving the row the familiar chat layout without tail arrows. */
+.message.assistant .bubble {
+  border-top-left-radius: 6px;
+}
+
+.message.user .bubble {
+  border-top-right-radius: 6px;
+}
+
 .content {
   margin: 0;
   /* Pre-wrapped so code blocks and line breaks from the model survive. */
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
 }
 
 .images {
@@ -243,7 +309,7 @@ async function copy() {
   font-size: 11px;
 }
 
-.footer {
+footer {
   display: flex;
   align-items: center;
   justify-content: flex-end;
@@ -293,16 +359,27 @@ async function copy() {
   animation: blink 1s steps(2, start) infinite;
 }
 
-@keyframes blink {
-  50% {
+/* Streaming replies are markdown: the caret sits on its own line. */
+.caret.block {
+  margin-top: 6px;
+  align-self: flex-start;
+  flex: none;
+}
+
+@keyframes message-in {
+  from {
     opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
   }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .typing span,
-  .caret {
-    animation: none;
+@keyframes blink {
+  50% {
+    opacity: 0;
   }
 }
 
@@ -316,6 +393,14 @@ async function copy() {
   30% {
     transform: translateY(-4px);
     opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .typing span,
+  .caret,
+  .message {
+    animation: none;
   }
 }
 </style>

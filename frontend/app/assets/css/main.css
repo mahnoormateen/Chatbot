@@ -35,6 +35,8 @@
   --danger: #f2777a;
   --danger-soft: rgba(242, 119, 122, 0.12);
   --danger-border: rgba(242, 119, 122, 0.35);
+  /* Text drawn on top of a solid --danger surface. */
+  --danger-fg: #241013;
 
   --shadow-color: rgba(0, 0, 0, 0.28);
 
@@ -42,6 +44,20 @@
   --radius-lg: 14px;
 
   --sidebar-width: 288px;
+
+  /* Syntax highlighting palette (GitHub-dark inspired). The code uses the
+     same structural tokens as prose: string/comment/number/keyword are
+     named, so both themes can swap them without touching the component. */
+  --code-comment: #7d8798;
+  --code-keyword: #8aa4ff;
+  --code-string: #7ee2a8;
+  --code-number: #f2a45c;
+  --code-title: #d9a0ff;
+  --code-builtin: #6dbeff;
+  --code-variable: #e6e9ef;
+  --code-meta: #98a2b3;
+  --code-addition: #7ee2a8;
+  --code-deletion: #f2777a;
 }
 
 :root[data-theme='light'] {
@@ -71,8 +87,21 @@
   --danger: #cc2f36;
   --danger-soft: rgba(204, 47, 54, 0.1);
   --danger-border: rgba(204, 47, 54, 0.32);
+  --danger-fg: #ffffff;
 
   --shadow-color: rgba(20, 24, 33, 0.1);
+
+  /* GitHub-light inspired tokens for the light palette. */
+  --code-comment: #57606a;
+  --code-keyword: #3a5ccc;
+  --code-string: #1a7f37;
+  --code-number: #b35900;
+  --code-title: #8250df;
+  --code-builtin: #0550ae;
+  --code-variable: #1f2328;
+  --code-meta: #59636e;
+  --code-addition: #1a7f37;
+  --code-deletion: #cf222e;
 }
 
 * {
@@ -146,6 +175,18 @@ select {
 .btn-primary:hover:not(:disabled) {
   background: var(--accent-strong);
   border-color: var(--accent-strong);
+}
+
+.btn-danger {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: var(--danger-fg);
+  font-weight: 600;
+}
+
+.btn-danger:hover:not(:disabled) {
+  background: var(--danger);
+  filter: brightness(1.1);
 }
 
 .btn-ghost {

@@ -6,6 +6,8 @@
  * runtimeConfig.public.apiBase. The Gemini API key stays on the server:
  * this app has no knowledge of it and never sends one.
  */
+import type { ChatMessage } from '~/composables/useChat'
+
 const { user, isAuthenticated, logout, refresh } = useAuth()
 
 const {
@@ -39,6 +41,13 @@ const {
 const ready = ref(false)
 const showSidebar = ref(true)
 const transcript = ref<HTMLElement | null>(null)
+
+/**
+ * Auto-following the stream. As soon as the user scrolls up the reading
+ * position is theirs; it only re-attaches when they scroll back to the
+ * bottom (or a new message is sent).
+ */
+const stickToBottom = ref(true)
 
 async function loadEverything() {
   await Promise.all([loadConversations(), loadModels()])
@@ -94,12 +103,103 @@ async function scrollToBottom() {
   if (element) element.scrollTop = element.scrollHeight
 }
 
+/** Whether the user is reading near the latest message again. */
+function onTranscriptScroll() {
+  const element = transcript.value
+  if (!element) return
+  const distance = element.scrollHeight - element.scrollTop - element.clientHeight
+  stickToBottom.value = distance < 90
+}
+
+function jumpToBottom() {
+  stickToBottom.value = true
+  scrollToBottom()
+}
+
+// A fresh conversation always starts pinned to the bottom.
+watch(activeId, () => {
+  stickToBottom.value = true
+  scrollToBottom()
+})
+
+// New messages (sent or loaded) always pull the view back to the bottom;
+// during streaming the transcript only follows while still pinned there.
+watch(
+  () => messages.value.length,
+  (count, previous) => {
+    if (typeof previous === 'number' && count > previous) {
+      stickToBottom.value = true
+      scrollToBottom()
+    }
+  }
+)
+
 watch(
   () => messages.value.map((message) => message.content.length).join(','),
-  scrollToBottom
+  () => {
+    if (stickToBottom.value) scrollToBottom()
+  }
 )
 
 onMounted(scrollToBottom)
+
+/** A transcript row is either a date separator or a message. */
+type TranscriptRow =
+  | { kind: 'separator'; label: string; key: string }
+  | { kind: 'message'; message: ChatMessage; key: string }
+
+function dayKey(value: string): string {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return ''
+  return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`
+}
+
+function dayLabel(value: string): string {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return ''
+
+  const startOfDay = (input: Date) =>
+    new Date(input.getFullYear(), input.getMonth(), input.getDate()).getTime()
+
+  const daysAgo = Math.round((startOfDay(new Date()) - startOfDay(date)) / 86_400_000)
+  if (daysAgo <= 0) return 'Today'
+  if (daysAgo === 1) return 'Yesterday'
+  if (daysAgo < 7) return date.toLocaleDateString(undefined, { weekday: 'long' })
+  return date.toLocaleDateString(undefined, {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  })
+}
+
+/** Messages with a friendly separator inserted whenever the day changes. */
+const rows = computed<TranscriptRow[]>(() => {
+  const transcript: TranscriptRow[] = []
+
+  let lastDay = ''
+  for (const message of messages.value) {
+    const day = dayKey(message.createdAt)
+    if (day && day !== lastDay) {
+      lastDay = day
+      transcript.push({ kind: 'separator', label: dayLabel(message.createdAt), key: `sep-${day}` })
+    }
+    transcript.push({
+      kind: 'message',
+      message,
+      key: `msg-${message.id}`,
+    })
+  }
+
+  return transcript
+})
+
+/** The welcome screen is replaced the moment the first message is sent. */
+const hasMessages = computed(() => messages.value.length > 0)
+
+/** Starter prompts on the welcome screen simply become a message. */
+function onPrompt(prompt: string) {
+  sendMessage(prompt)
+}
 </script>
 
 <template>
@@ -145,26 +245,44 @@ onMounted(scrollToBottom)
         <ThemeToggle />
 
         <div class="account">
-          <span class="avatar" aria-hidden="true">{{ user?.initials }}</span>
+          <span class="account-avatar" aria-hidden="true">{{ user?.initials }}</span>
           <span class="name">{{ user?.fullName || user?.email }}</span>
           <button class="btn-ghost" type="button" @click="signOut">Sign out</button>
         </div>
       </header>
 
-      <div ref="transcript" class="transcript">
+      <div ref="transcript" class="transcript" @scroll="onTranscriptScroll">
         <div v-if="loadingMessages" class="skeletons" aria-hidden="true">
           <div class="skeleton skeleton-short" />
           <div class="skeleton" />
           <div class="skeleton skeleton-mid" />
         </div>
 
-        <div v-else-if="!messages.length" class="empty">
-          <h2>Ask Gemini something</h2>
-          <p>Your conversation starts here. The API key stays on the backend.</p>
-        </div>
+        <ChatWelcome v-else-if="!hasMessages" @send="onPrompt" />
 
-        <ChatMessageItem v-for="message in messages" :key="message.id" :message="message" />
+        <template v-for="row in rows" :key="row.key">
+          <div v-if="row.kind === 'separator'" class="day" aria-hidden="true">
+            <span>{{ row.label }}</span>
+          </div>
+          <ChatMessageItem
+            v-else
+            :message="row.message"
+            :user-initials="user?.initials"
+          />
+        </template>
       </div>
+
+      <button
+        v-if="hasMessages && !stickToBottom"
+        class="jump"
+        type="button"
+        aria-label="Scroll to the latest message"
+        title="Scroll to latest"
+        @click="jumpToBottom"
+      >
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9" /></svg>
+        <span class="sr-only">Scroll to latest</span>
+      </button>
 
       <footer class="composer-wrap">
         <ErrorBanner
@@ -203,6 +321,7 @@ onMounted(scrollToBottom)
 .main {
   flex: 1;
   min-width: 0;
+  position: relative;
   display: flex;
   flex-direction: column;
 }
@@ -240,7 +359,7 @@ onMounted(scrollToBottom)
   color: var(--text-muted);
 }
 
-.avatar {
+.account-avatar {
   display: grid;
   place-items: center;
   width: 28px;
@@ -269,21 +388,54 @@ onMounted(scrollToBottom)
   padding: 22px 18px;
 }
 
-.empty {
-  margin: auto;
-  text-align: center;
+/* Day separator pinned between the surrounding bubbles. */
+.day {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 2px 0;
   color: var(--text-faint);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
-.empty h2 {
-  margin: 0 0 4px;
-  font-size: 17px;
+.day::before,
+.day::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
+.day span {
+  white-space: nowrap;
+}
+
+/* Floating button that brings the reader back to the live end. */
+.jump {
+  position: absolute;
+  right: 28px;
+  bottom: 116px;
+  z-index: 5;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 1px solid var(--border-strong);
+  background: var(--bg-raised);
   color: var(--text-muted);
+  box-shadow: 0 8px 24px var(--shadow-color);
+  transition: color 0.15s ease, transform 0.15s ease, border-color 0.15s ease;
+  animation: rise 0.18s ease both;
 }
 
-.empty p {
-  margin: 0;
-  font-size: 14px;
+.jump:hover {
+  color: var(--accent-strong);
+  border-color: var(--accent-border);
+  transform: translateY(-2px);
 }
 
 .composer-wrap {
@@ -294,6 +446,17 @@ onMounted(scrollToBottom)
 
 .composer-wrap .alert {
   margin-bottom: 10px;
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 @media (max-width: 760px) {

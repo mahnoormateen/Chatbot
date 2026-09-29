@@ -58,9 +58,13 @@ const draft = ref('')
 const textarea = ref<HTMLTextAreaElement | null>(null)
 const fileInput = ref<HTMLInputElement | null>(null)
 const attachments = ref<StagedImage[]>([])
-const pdfInput = ref<HTMLInputElement | null>(null)
 const pdfs = ref<StagedPdf[]>([])
 const attachError = ref('')
+
+/** True while a dragged file hovers the composer, drives the drop hint. */
+const dragActive = ref(false)
+/** Drag enter/leave fire per child element; counting keeps the state sane. */
+let dragDepth = 0
 
 /** Short label for the in flight turn. */
 const statusLabel = computed(() => {
@@ -108,73 +112,135 @@ function submit() {
   })
 }
 
-function pickImages() {
+/**
+ * The pin button opens one hidden input that serves both kinds of file,
+ * so attaching is a single control. "accept" is only a filter hint for
+ * the browser's file dialog - it is not a security boundary, which is why
+ * every file is still type checked in stageFiles.
+ */
+function openFilePicker() {
   if (props.sending) return
   fileInput.value?.click()
 }
 
-/**
- * Queues the picked files, enforcing the same limits the backend applies.
- * Reading is async, so each file resolves on its own and errors are
- * surfaced in the attachError notice.
- */
-function onFilesSelected(event: Event) {
+function onFilesPicked(event: Event) {
   const input = event.target as HTMLInputElement
   const files = Array.from(input.files ?? [])
   input.value = ''
-  attachError.value = ''
-
-  if (files.length === 0) return
-
-  const room = MAX_IMAGES - attachments.value.length
-  if (room <= 0) {
-    attachError.value = `At most ${MAX_IMAGES} images per message`
-    return
-  }
-
-  let staged = 0
-  for (const file of files) {
-    if (staged >= room) {
-      attachError.value = `At most ${MAX_IMAGES} images per message`
-      break
-    }
-    if (!ACCEPTED_MIME_TYPES.has(file.type)) {
-      attachError.value = `${file.name} is not a supported image (JPEG, PNG, WebP, HEIC/HEIF)`
-      continue
-    }
-    staged++
-    readFileAsImage(file).then((image) => {
-      if (image) attachments.value.push(image)
-    })
-  }
+  stageFiles(files)
 }
 
-function readFileAsImage(file: File): Promise<StagedImage | null> {
+/**
+ * Queues picked, pasted or dropped files, enforcing the same limits the
+ * backend applies. Reading is async, so each file resolves on its own and
+ * errors are surfaced in the attachError notice.
+ */
+function stageFiles(files: File[]) {
+  attachError.value = ''
+  if (!files.length) return
+
+  const images: File[] = []
+  const documents: File[] = []
+  /**
+   * Every rejection is collected rather than overwritten, so a drop of
+   * five mixed files reports all five problems instead of only the last.
+   */
+  const rejected: string[] = []
+
+  for (const file of files) {
+    if (file.type === 'application/pdf' || /\.pdf$/i.test(file.name)) {
+      documents.push(file)
+    } else if (ACCEPTED_MIME_TYPES.has(file.type)) {
+      images.push(file)
+    } else if (file.type.startsWith('image/')) {
+      rejected.push(`${file.name} is not a supported image (JPEG, PNG, WebP, HEIC or HEIF)`)
+    } else {
+      /**
+       * The name is quoted so the message stays readable for a file
+       * called "invoice.docx", which is the common case here.
+       */
+      rejected.push(`"${file.name}" is not an image or a PDF`)
+    }
+  }
+
+  // Images have their own count and per-file size caps.
+  let imageRoom = MAX_IMAGES - attachments.value.length
+  for (const file of images) {
+    if (imageRoom <= 0) {
+      rejected.push(`Only ${MAX_IMAGES} images can be pinned to one message`)
+      break
+    }
+    imageRoom--
+    readFileAsImage(file).then((staged) => {
+      /**
+       * Reading is asynchronous, so a size failure arrives after the
+       * notice above has already been shown. It is reported through the
+       * same line rather than dropped.
+       */
+      if (staged.image) attachments.value.push(staged.image)
+      else if (staged.error) attachError.value = attachError.value
+        ? `${attachError.value}. ${staged.error}`
+        : staged.error
+    })
+  }
+
+  // PDFs cap per file and per turn in raw bytes.
+  let pdfRoom = MAX_PDFS - pdfs.value.length
+  let totalSoFar = pdfs.value.reduce((sum, pdf) => sum + pdf.size, 0)
+
+  for (const file of documents) {
+    if (pdfRoom <= 0) {
+      rejected.push(`Only ${MAX_PDFS} PDFs can be pinned to one message`)
+      break
+    }
+    if (file.size > MAX_PDF_BYTES) {
+      rejected.push(`"${file.name}" is larger than the 8 MB limit`)
+      continue
+    }
+    if (totalSoFar + file.size > MAX_PDF_TOTAL_BYTES) {
+      rejected.push(`"${file.name}" would push the PDFs past the 12 MB limit`)
+      continue
+    }
+
+    pdfRoom--
+    totalSoFar += file.size
+    readFileAsPdf(file).then((staged) => {
+      if (staged.pdf) pdfs.value.push({ ...staged.pdf, size: file.size })
+      else if (staged.error) attachError.value = attachError.value
+        ? `${attachError.value}. ${staged.error}`
+        : staged.error
+    })
+  }
+
+  attachError.value = rejected.join('. ')
+}
+
+/** Either the staged image or the reason it could not be staged. */
+function readFileAsImage(file: File): Promise<{ image?: StagedImage; error?: string }> {
   return new Promise((resolve) => {
     const reader = new FileReader()
-    reader.onerror = () => resolve(null)
+    reader.onerror = () => resolve({ error: `"${file.name}" could not be read` })
     reader.onload = () => {
       const url = String(reader.result ?? '')
       const match = /^data:([a-z0-9.+-]+\/[a-z0-9.+-]+);base64,(.+)$/s.exec(url)
-      if (!match) {
-        resolve(null)
-        return
-      }
+      const mimeType = match?.[1]
+      const data = match?.[2]
 
-      const mimeType = match[1]
-      const data = match[2]
       if (!mimeType || !data) {
-        resolve(null)
+        resolve({ error: `"${file.name}" could not be read` })
         return
       }
 
+      /**
+       * The cap is on the encoded length, since that is what the request
+       * and the database column actually carry.
+       */
       if (data.length > MAX_DATA_LENGTH) {
-        attachError.value = `${file.name} is larger than the 6 MB limit`
-        resolve(null)
+        resolve({ error: `"${file.name}" is larger than the 6 MB image limit` })
         return
       }
 
-      resolve({ name: file.name, mimeType, data })
+      resolve({ image: { name: file.name, mimeType, data } })
     }
     reader.readAsDataURL(file)
   })
@@ -184,71 +250,19 @@ function removeImage(index: number) {
   attachments.value.splice(index, 1)
 }
 
-function pickPdfs() {
-  if (props.sending) return
-  pdfInput.value?.click()
-}
-
-/**
- * Queues picked PDFs under the same ceilings the backend enforces. The
- * raw file size decides per-file and per-turn limits, matching the byte
- * counts the backend measures from the decoded base64.
- */
-function onPdfsSelected(event: Event) {
-  const input = event.target as HTMLInputElement
-  const files = Array.from(input.files ?? [])
-  input.value = ''
-  attachError.value = ''
-
-  if (files.length === 0) return
-
-  let room = MAX_PDFS - pdfs.value.length
-  if (room <= 0) {
-    attachError.value = `At most ${MAX_PDFS} PDFs per message`
-    return
-  }
-
-  const totalSoFar = pdfs.value.reduce((sum, pdf) => sum + pdf.size, 0)
-  let runningTotal = totalSoFar
-
-  for (const file of files) {
-    if (room <= 0) {
-      attachError.value = `At most ${MAX_PDFS} PDFs per message`
-      break
-    }
-    if (!file.name.toLowerCase().endsWith('.pdf')) {
-      attachError.value = `${file.name} is not a PDF`
-      continue
-    }
-    if (file.size > MAX_PDF_BYTES) {
-      attachError.value = `${file.name} is larger than the 8 MB limit`
-      continue
-    }
-    if (runningTotal + file.size > MAX_PDF_TOTAL_BYTES) {
-      attachError.value = 'The documents total more than 12 MB'
-      continue
-    }
-
-    room--
-    runningTotal += file.size
-    readFileAsPdf(file).then((pdf) => {
-      if (pdf) pdfs.value.push({ ...pdf, size: file.size })
-    })
-  }
-}
-
-function readFileAsPdf(file: File): Promise<Omit<StagedPdf, 'size'> | null> {
+/** Either the staged document or the reason it could not be staged. */
+function readFileAsPdf(file: File): Promise<{ pdf?: Omit<StagedPdf, 'size'>; error?: string }> {
   return new Promise((resolve) => {
     const reader = new FileReader()
-    reader.onerror = () => resolve(null)
+    reader.onerror = () => resolve({ error: `"${file.name}" could not be read` })
     reader.onload = () => {
       const url = String(reader.result ?? '')
       const match = /^data:[^;,]+;base64,(.+)$/s.exec(url)
       if (!match?.[1]) {
-        resolve(null)
+        resolve({ error: `"${file.name}" could not be read` })
         return
       }
-      resolve({ name: file.name, data: match[1] })
+      resolve({ pdf: { name: file.name, data: match[1] } })
     }
     reader.readAsDataURL(file)
   })
@@ -272,26 +286,99 @@ function onKeydown(event: KeyboardEvent) {
   submit()
 }
 
+/**
+ * Images copied to the clipboard (a screenshot, a copied photo) can be
+ * attached directly instead of going through the file dialog.
+ */
+function onPaste(event: ClipboardEvent) {
+  const items = event.clipboardData?.items
+  if (!items) return
+
+  const files: File[] = []
+  for (const item of items) {
+    if (item.kind !== 'file') continue
+    const file = item.getAsFile()
+    if (file) files.push(file)
+  }
+
+  if (!files.length) return
+
+  // We handle the files ourselves, so the paste must not also drop text
+  // (often a rich-text dump of the same image) into the textarea.
+  event.preventDefault()
+  stageFiles(files)
+}
+
+function onDragEnter(event: DragEvent) {
+  event.preventDefault()
+  dragDepth++
+  dragActive.value = true
+}
+
+function onDragOver(event: DragEvent) {
+  event.preventDefault()
+  if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy'
+}
+
+function onDragLeave(event: DragEvent) {
+  event.preventDefault()
+  dragDepth = Math.max(0, dragDepth - 1)
+  if (dragDepth === 0) dragActive.value = false
+}
+
+function onDrop(event: DragEvent) {
+  event.preventDefault()
+  dragDepth = 0
+  dragActive.value = false
+
+  const files = Array.from(event.dataTransfer?.files ?? [])
+  stageFiles(files)
+}
+
 onMounted(autoGrow)
 </script>
 
 <template>
-  <form class="composer" @submit.prevent="submit">
+  <form
+    class="composer"
+    :class="{ dragging: dragActive }"
+    @submit.prevent="submit"
+    @dragenter="onDragEnter"
+    @dragover="onDragOver"
+    @dragleave="onDragLeave"
+    @drop="onDrop"
+  >
+    <div v-if="dragActive" class="drop-overlay" aria-hidden="true">
+      <svg
+        viewBox="0 0 24 24"
+        width="28"
+        height="28"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.8"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+        <polyline points="17 8 12 3 7 8" />
+        <line x1="12" y1="3" x2="12" y2="15" />
+      </svg>
+      <span>Drop images or PDFs to pin them</span>
+    </div>
+
+    <!--
+      One input behind the pin button, covering both supported kinds of
+      file. "accept" is a filter hint the browser shows in the file
+      dialog; it is not a security boundary, which is why every file is
+      still type checked in stageFiles.
+    -->
     <input
       ref="fileInput"
       class="file-input"
       type="file"
-      accept="image/*"
+      accept="image/jpeg,image/png,image/webp,image/heic,image/heif,.pdf,application/pdf"
       multiple
-      @change="onFilesSelected"
-    />
-    <input
-      ref="pdfInput"
-      class="file-input"
-      type="file"
-      accept=".pdf,application/pdf"
-      multiple
-      @change="onPdfsSelected"
+      @change="onFilesPicked"
     />
 
     <div
@@ -338,6 +425,7 @@ onMounted(autoGrow)
       aria-label="Message"
       @input="autoGrow"
       @keydown="onKeydown"
+      @paste="onPaste"
     />
 
     <div class="bar">
@@ -346,9 +434,9 @@ onMounted(autoGrow)
           class="btn attach"
           type="button"
           :disabled="props.sending"
-          aria-label="Attach an image"
-          title="Attach an image"
-          @click="pickImages"
+          aria-label="Pin an image or PDF to this message"
+          title="Pin an image or PDF to this message"
+          @click="openFilePicker"
         >
           <svg
             viewBox="0 0 24 24"
@@ -361,37 +449,11 @@ onMounted(autoGrow)
             stroke-linejoin="round"
             aria-hidden="true"
           >
-            <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
-            <circle cx="8.5" cy="8.5" r="1.5" />
-            <polyline points="21 15 16 10 5 21" />
+            <path
+              d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"
+            />
           </svg>
-          <span>Image</span>
-        </button>
-
-        <button
-          class="btn attach"
-          type="button"
-          :disabled="props.sending"
-          aria-label="Attach a PDF"
-          title="Attach a PDF"
-          @click="pickPdfs"
-        >
-          <svg
-            viewBox="0 0 24 24"
-            width="16"
-            height="16"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            aria-hidden="true"
-          >
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-            <polyline points="7 10 12 15 17 10" />
-            <line x1="12" y1="15" x2="12" y2="3" />
-          </svg>
-          <span>PDF</span>
+          <span>Pin</span>
         </button>
 
         <span v-if="attachError" class="error" role="status" aria-live="polite">
@@ -401,7 +463,7 @@ onMounted(autoGrow)
           <span class="spinner" aria-hidden="true" />
           {{ statusLabel }}
         </span>
-        <span v-else class="hint">Enter to send | Shift+Enter for a new line</span>
+        <span v-else class="hint">Enter to send | Shift+Enter for a new line | paste or drop files</span>
       </div>
 
       <button class="btn btn-primary send" type="submit" :disabled="!canSend">
@@ -414,6 +476,7 @@ onMounted(autoGrow)
 
 <style scoped>
 .composer {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -422,6 +485,36 @@ onMounted(autoGrow)
   border: 1px solid var(--border);
   background: var(--bg);
   box-shadow: 0 8px 30px var(--shadow-color);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.composer:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft), 0 8px 30px var(--shadow-color);
+}
+
+.composer.dragging {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+/* Full-composer hint shown while a file hovers over it. */
+.drop-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border-radius: var(--radius-lg);
+  border: 2px dashed var(--accent);
+  background: color-mix(in srgb, var(--bg) 88%, var(--accent) 12%);
+  color: var(--accent-strong);
+  font-size: 14px;
+  font-weight: 500;
+  pointer-events: none;
 }
 
 .input {
@@ -478,12 +571,21 @@ onMounted(autoGrow)
   text-overflow: ellipsis;
 }
 
+/*
+ * The rejection notice can name several files, so it wraps instead of
+ * being truncated on one line. Capped at two lines so a large drop of
+ * bad files cannot push the send button out of the composer.
+ */
 .error {
+  max-width: 100%;
+  max-height: 2.6em;
   font-size: 11.5px;
+  line-height: 1.3;
   color: var(--danger);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .status {
