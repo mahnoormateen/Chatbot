@@ -28,12 +28,13 @@ export default class AttachmentService {
 
   constructor() {
     /**
-     * Resolved against the backend directory, so a relative value in .env
-     * means the same thing no matter which directory the process was
-     * started from.
+     * Resolved against the backend project root, so a relative value in
+     * .env means the same thing no matter which directory the process was
+     * started from. From "app/services" that is two levels up in
+     * development and inside "build" when the app is compiled.
      */
     const configured = env.get('ATTACHMENT_STORAGE_PATH')
-    this.#root = resolve(import.meta.dirname, '..', configured ?? 'storage/attachments')
+    this.#root = resolve(import.meta.dirname, '..', '..', configured ?? 'storage/attachments')
   }
 
   /**
@@ -137,6 +138,66 @@ export default class AttachmentService {
       name: name.slice(0, 255),
       mimeType: 'application/pdf',
       size: actual,
+      path: relativePath,
+    })
+  }
+
+  /**
+   * Persists a PDF that arrived as base64 (the chat turn) instead of a
+   * multipart upload. The same rules apply: extension and magic header are
+   * checked, the size is measured from the decoded bytes so a lying client
+   * cannot slip something past the limit, and the file lands at a generated
+   * path on disk. The row is created without a message id; the turn
+   * persistence claims it once the message it belongs to exists.
+   */
+  async storeFromBase64(conversationId: number, name: string, data: string): Promise<Attachment> {
+    const cleanName = name.trim()
+    if (!cleanName) {
+      throw new Exception('The attachment has no file name', { status: 422, code: 'E_NO_FILE_NAME' })
+    }
+
+    if (!cleanName.toLowerCase().endsWith('.pdf')) {
+      throw new Exception('Only PDF files can be attached', {
+        status: 422,
+        code: 'E_UNSUPPORTED_FILE_TYPE',
+      })
+    }
+
+    const { maxFileSizeBytes } = geminiConfig.attachments
+    const bytes = Buffer.from(data, 'base64')
+
+    if (bytes.length < 1) {
+      throw new Exception('That PDF is empty or unreadable', {
+        status: 422,
+        code: 'E_EMPTY_FILE',
+      })
+    }
+
+    if (bytes.length > maxFileSizeBytes) {
+      throw new Exception(`That PDF is larger than the ${mb(maxFileSizeBytes)} MB limit`, {
+        status: 422,
+        code: 'E_FILE_TOO_LARGE',
+      })
+    }
+
+    if (bytes.subarray(0, 5).toString('latin1') !== '%PDF-') {
+      throw new Exception('That file is not a PDF', {
+        status: 422,
+        code: 'E_NOT_A_PDF',
+      })
+    }
+
+    const relativePath = join(randomBytes(2).toString('hex'), `${randomBytes(16).toString('hex')}.pdf`)
+    const target = this.#absolute(relativePath)
+
+    await mkdir(dirname(target), { recursive: true })
+    await writeFile(target, bytes)
+
+    return Attachment.create({
+      conversationId,
+      name: cleanName.slice(0, 255),
+      mimeType: 'application/pdf',
+      size: bytes.length,
       path: relativePath,
     })
   }

@@ -1,9 +1,11 @@
-import { GoogleGenAI, type Content, type Model } from '@google/genai'
+import { GoogleGenAI, type Content, type Model, type Part } from '@google/genai'
 import logger from '@adonisjs/core/services/logger'
 import env from '#start/env'
 import { geminiConfig, type TierConfig } from '#config/gemini'
 import GeminiError from '#exceptions/gemini_error'
+import type Attachment from '#models/attachment'
 import type Message from '#models/message'
+import type AttachmentService from '#services/attachment_service'
 
 /**
  * Shape returned to the client for the model picker dropdown.
@@ -53,6 +55,17 @@ type ReplyPayload = {
   history: Message[]
   /** Images attached to the new user turn, sent as inline data. */
   images?: ImageAttachment[]
+  /**
+   * PDFs attached to the new user turn. Their rows already exist; the
+   * bytes are read from disk through "attachmentService".
+   */
+  attachments?: Attachment[]
+  /**
+   * Reads attachment bytes for the turn and for history. Required when
+   * either carries a PDF, so callers resolving services through the
+   * container pass it in explicitly.
+   */
+  attachmentService?: AttachmentService
 }
 
 /**
@@ -355,13 +368,21 @@ export default class GeminiService {
    * returned here rather than what they asked for.
    */
   async generateReply(payload: ReplyPayload): Promise<{ model: string; text: string }> {
-    const { model, result } = await this.#withFailover('generateContent', payload.model, (m) =>
-      this.#client.models.generateContent({
+    const { model, result } = await this.#withFailover('generateContent', payload.model, async (m) => {
+      const contents = await this.#buildContents(
+        payload.prompt,
+        payload.history,
+        payload.images,
+        payload.attachments,
+        payload.attachmentService
+      )
+
+      return this.#client.models.generateContent({
         model: m,
-        contents: this.#buildContents(payload.prompt, payload.history, payload.images),
+        contents,
         config: this.#generationConfig(),
       })
-    )
+    })
 
     return { model, text: result.text?.trim() || '' }
   }
@@ -380,12 +401,21 @@ export default class GeminiService {
     const { model, result: stream } = await this.#withFailover(
       'generateContentStream',
       payload.model,
-      (m) =>
-        this.#client.models.generateContentStream({
+      async (m) => {
+        const contents = await this.#buildContents(
+          payload.prompt,
+          payload.history,
+          payload.images,
+          payload.attachments,
+          payload.attachmentService
+        )
+
+        return this.#client.models.generateContentStream({
           model: m,
-          contents: this.#buildContents(payload.prompt, payload.history, payload.images),
+          contents,
           config: this.#generationConfig(),
         })
+      }
     )
 
     const service = this
@@ -749,37 +779,52 @@ export default class GeminiService {
    * expected by the API, keeping only the most recent turns so a long
    * conversation cannot blow up the token budget.
    *
-   * Each user turn becomes text plus one inline image part per attached
-   * image. Because the images are stored on the message row, the model
-   * sees the same picture it saw when the turn was sent.
+   * Every user turn becomes text plus one inline part per attached image,
+   * and, when a storage service is available, one inline part per PDF.
+   * Images are stored on the message row, while PDF bytes live on disk,
+   * so both see the same picture the model saw when the turn was sent.
    */
-  #buildContents(
+  async #buildContents(
     prompt: string,
     history: Message[],
-    promptImages: ImageAttachment[] = []
-  ): Content[] {
+    promptImages: ImageAttachment[] = [],
+    promptAttachments: Attachment[] = [],
+    attachmentService?: AttachmentService
+  ): Promise<Content[]> {
     const recent = history.slice(-geminiConfig.maxHistoryMessages)
 
-    return [
-      ...recent.map((message) => ({
+    const historyContents: Content[] = []
+    for (const message of recent) {
+      const parts: Part[] = []
+      if (message.content) parts.push({ text: message.content })
+
+      for (const image of (message.images ?? []) as ImageAttachment[]) {
+        parts.push({ inlineData: { mimeType: image.mimeType, data: image.data } })
+      }
+
+      const historyAttachments = message.attachments as Attachment[] | undefined
+      if (attachmentService && historyAttachments?.length) {
+        parts.push(...(await attachmentService.toInlineParts(historyAttachments)))
+      }
+
+      historyContents.push({
         role: message.role === 'assistant' ? ('model' as const) : ('user' as const),
-        parts: [
-          ...(message.content ? [{ text: message.content }] : []),
-          ...((message.images ?? []) as ImageAttachment[]).map((image) => ({
-            inlineData: { mimeType: image.mimeType, data: image.data },
-          })),
-        ],
-      })),
-      {
-        role: 'user' as const,
-        parts: [
-          ...(prompt ? [{ text: prompt }] : []),
-          ...promptImages.map((image) => ({
-            inlineData: { mimeType: image.mimeType, data: image.data },
-          })),
-        ],
-      },
-    ]
+        parts,
+      })
+    }
+
+    const promptParts: Part[] = []
+    if (prompt) promptParts.push({ text: prompt })
+
+    for (const image of promptImages) {
+      promptParts.push({ inlineData: { mimeType: image.mimeType, data: image.data } })
+    }
+
+    if (attachmentService && promptAttachments.length) {
+      promptParts.push(...(await attachmentService.toInlineParts(promptAttachments)))
+    }
+
+    return [...historyContents, { role: 'user' as const, parts: promptParts }]
   }
 
   #generationConfig() {

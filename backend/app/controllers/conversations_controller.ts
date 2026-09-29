@@ -2,7 +2,9 @@ import type { HttpContext } from '@adonisjs/core/http'
 import { Exception } from '@adonisjs/core/exceptions'
 import env from '#start/env'
 import { DEFAULT_CONVERSATION_TITLE } from '#consts'
+import Attachment from '#models/attachment'
 import Conversation from '#models/conversation'
+import AttachmentService from '#services/attachment_service'
 import ConversationTransformer from '#transformers/conversation_transformer'
 import ConversationDetailTransformer from '#transformers/conversation_detail_transformer'
 import { createConversationValidator, updateConversationValidator } from '#validators/conversation'
@@ -76,7 +78,9 @@ export default class ConversationsController {
     const user = auth.getUserOrFail()
     const conversation = await findOwnedConversation(user.id, params.id)
 
-    await conversation.load('messages', (query) => query.orderBy('id', 'asc'))
+    await conversation.load('messages', (query) =>
+      query.orderBy('id', 'asc').preload('attachments')
+    )
 
     return await serialize(ConversationDetailTransformer.transform(conversation))
   }
@@ -91,9 +95,18 @@ export default class ConversationsController {
     return await serialize(ConversationTransformer.transform(conversation))
   }
 
-  async destroy({ auth, params, response }: HttpContext) {
+  async destroy({ auth, params, response, containerResolver }: HttpContext) {
     const user = auth.getUserOrFail()
     const conversation = await findOwnedConversation(user.id, params.id)
+
+    /**
+     * Deleting the conversation cascades to its messages and attachment
+     * rows, but the files on disk are removed separately, so a deleted
+     * chat cannot leave its documents lying around.
+     */
+    const attachmentService = await containerResolver.make(AttachmentService)
+    const attachments = await Attachment.query().where('conversationId', conversation.id)
+    await attachmentService.destroyAll(attachments)
 
     await conversation.delete()
 

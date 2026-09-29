@@ -58,6 +58,14 @@ router
         router.get('/', [controllers.Messages, 'index']).as('conversations.messages.index')
         router.post('/', [controllers.Messages, 'store']).as('conversations.messages.store')
         router.post('/stream', [controllers.Messages, 'stream']).as('conversations.messages.stream')
+
+        /**
+         * Downloads the bytes of a stored attachment, scoped to the
+         * conversation, message and owner inside the controller.
+         */
+        router
+          .get('/:messageId/attachments/:attachmentId', [controllers.Messages, 'attachmentFile'])
+          .as('conversations.messages.attachments.file')
       })
       .prefix('/conversations/:conversationId/messages')
   })

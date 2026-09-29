@@ -17,6 +17,9 @@ build/
 tmp/
 .adonisjs/
 
+# User uploaded attachments (files live on disk, metadata stays in the DB)
+backend/storage/
+
 # Environment (keep examples)
 .env
 .env.*

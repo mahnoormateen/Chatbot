@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { MessageImage } from '~/types/api'
+import type { MessageImage, PdfInput } from '~/types/api'
 import type { SendPhase } from '~/composables/useChat'
 
 const props = defineProps<{
@@ -10,7 +10,9 @@ const props = defineProps<{
   model?: string
 }>()
 
-const emit = defineEmits<{ send: [content: string, images?: MessageImage[]] }>()
+const emit = defineEmits<{
+  send: [content: string, images?: MessageImage[], pdfs?: PdfInput[]]
+}>()
 
 /**
  * A file staged in the composer, not sent yet. "data" is the base64
@@ -20,6 +22,13 @@ interface StagedImage {
   name: string
   mimeType: string
   data: string
+}
+
+/** A PDF staged for the turn, with its raw byte count for the size caps. */
+interface StagedPdf {
+  name: string
+  data: string
+  size: number
 }
 
 /** Mirrors the mime types the backend validator accepts. */
@@ -37,10 +46,20 @@ const MAX_DATA_LENGTH = 8_000_000
 /** The backend accepts at most this many images per message. */
 const MAX_IMAGES = 3
 
+/**
+ * PDF ceilings aligned with config/gemini.ts on the backend: per file and
+ * per turn, measured in raw bytes before base64 inflation.
+ */
+const MAX_PDFS = 3
+const MAX_PDF_BYTES = 8 * 1024 * 1024
+const MAX_PDF_TOTAL_BYTES = 12 * 1024 * 1024
+
 const draft = ref('')
 const textarea = ref<HTMLTextAreaElement | null>(null)
 const fileInput = ref<HTMLInputElement | null>(null)
 const attachments = ref<StagedImage[]>([])
+const pdfInput = ref<HTMLInputElement | null>(null)
+const pdfs = ref<StagedPdf[]>([])
 const attachError = ref('')
 
 /** Short label for the in flight turn. */
@@ -61,7 +80,11 @@ function autoGrow() {
 }
 
 const canSend = computed(
-  () => (draft.value.trim().length > 0 || attachments.value.length > 0) && !props.sending
+  () =>
+    (draft.value.trim().length > 0 ||
+      attachments.value.length > 0 ||
+      pdfs.value.length > 0) &&
+    !props.sending
 )
 
 function submit() {
@@ -70,10 +93,12 @@ function submit() {
   emit(
     'send',
     draft.value.trim(),
-    attachments.value.map(({ mimeType, data }) => ({ mimeType, data }))
+    attachments.value.map(({ mimeType, data }) => ({ mimeType, data })),
+    pdfs.value.map(({ name, data }) => ({ name, data }))
   )
   draft.value = ''
   attachments.value = []
+  pdfs.value = []
   attachError.value = ''
 
   // Clear the box and shrink it back before the next message streams in.
@@ -159,6 +184,87 @@ function removeImage(index: number) {
   attachments.value.splice(index, 1)
 }
 
+function pickPdfs() {
+  if (props.sending) return
+  pdfInput.value?.click()
+}
+
+/**
+ * Queues picked PDFs under the same ceilings the backend enforces. The
+ * raw file size decides per-file and per-turn limits, matching the byte
+ * counts the backend measures from the decoded base64.
+ */
+function onPdfsSelected(event: Event) {
+  const input = event.target as HTMLInputElement
+  const files = Array.from(input.files ?? [])
+  input.value = ''
+  attachError.value = ''
+
+  if (files.length === 0) return
+
+  let room = MAX_PDFS - pdfs.value.length
+  if (room <= 0) {
+    attachError.value = `At most ${MAX_PDFS} PDFs per message`
+    return
+  }
+
+  const totalSoFar = pdfs.value.reduce((sum, pdf) => sum + pdf.size, 0)
+  let runningTotal = totalSoFar
+
+  for (const file of files) {
+    if (room <= 0) {
+      attachError.value = `At most ${MAX_PDFS} PDFs per message`
+      break
+    }
+    if (!file.name.toLowerCase().endsWith('.pdf')) {
+      attachError.value = `${file.name} is not a PDF`
+      continue
+    }
+    if (file.size > MAX_PDF_BYTES) {
+      attachError.value = `${file.name} is larger than the 8 MB limit`
+      continue
+    }
+    if (runningTotal + file.size > MAX_PDF_TOTAL_BYTES) {
+      attachError.value = 'The documents total more than 12 MB'
+      continue
+    }
+
+    room--
+    runningTotal += file.size
+    readFileAsPdf(file).then((pdf) => {
+      if (pdf) pdfs.value.push({ ...pdf, size: file.size })
+    })
+  }
+}
+
+function readFileAsPdf(file: File): Promise<Omit<StagedPdf, 'size'> | null> {
+  return new Promise((resolve) => {
+    const reader = new FileReader()
+    reader.onerror = () => resolve(null)
+    reader.onload = () => {
+      const url = String(reader.result ?? '')
+      const match = /^data:[^;,]+;base64,(.+)$/s.exec(url)
+      if (!match?.[1]) {
+        resolve(null)
+        return
+      }
+      resolve({ name: file.name, data: match[1] })
+    }
+    reader.readAsDataURL(file)
+  })
+}
+
+function removePdf(index: number) {
+  pdfs.value.splice(index, 1)
+}
+
+/** Compact human readable size for a chip: 512 KB, 1.2 MB. */
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+}
+
 /** Enter sends, Shift+Enter inserts a newline. */
 function onKeydown(event: KeyboardEvent) {
   if (event.key !== 'Enter' || event.shiftKey) return
@@ -179,8 +285,21 @@ onMounted(autoGrow)
       multiple
       @change="onFilesSelected"
     />
+    <input
+      ref="pdfInput"
+      class="file-input"
+      type="file"
+      accept=".pdf,application/pdf"
+      multiple
+      @change="onPdfsSelected"
+    />
 
-    <div v-if="attachments.length" class="previews" role="list" aria-label="Images to send">
+    <div
+      v-if="attachments.length || pdfs.length"
+      class="previews"
+      role="list"
+      aria-label="Files to send"
+    >
       <figure v-for="(attachment, index) in attachments" :key="index" class="preview" role="listitem">
         <img :src="`data:${attachment.mimeType};base64,${attachment.data}`" :alt="attachment.name" />
         <button
@@ -193,6 +312,20 @@ onMounted(autoGrow)
         </button>
         <figcaption class="name">{{ attachment.name }}</figcaption>
       </figure>
+
+      <div v-for="(pdf, index) in pdfs" :key="`pdf-${index}`" class="pdf-preview" role="listitem">
+        <span class="pdf-badge" aria-hidden="true">PDF</span>
+        <span class="pdf-name">{{ pdf.name }}</span>
+        <span class="pdf-size">{{ formatBytes(pdf.size) }}</span>
+        <button
+          class="pdf-remove"
+          type="button"
+          :aria-label="`Remove ${pdf.name}`"
+          @click="removePdf(index)"
+        >
+          ×
+        </button>
+      </div>
     </div>
 
     <textarea
@@ -233,6 +366,32 @@ onMounted(autoGrow)
             <polyline points="21 15 16 10 5 21" />
           </svg>
           <span>Image</span>
+        </button>
+
+        <button
+          class="btn attach"
+          type="button"
+          :disabled="props.sending"
+          aria-label="Attach a PDF"
+          title="Attach a PDF"
+          @click="pickPdfs"
+        >
+          <svg
+            viewBox="0 0 24 24"
+            width="16"
+            height="16"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+            <polyline points="7 10 12 15 17 10" />
+            <line x1="12" y1="15" x2="12" y2="3" />
+          </svg>
+          <span>PDF</span>
         </button>
 
         <span v-if="attachError" class="error" role="status" aria-live="polite">
@@ -387,6 +546,61 @@ onMounted(autoGrow)
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* Staged PDF chips, shown beside the image previews. */
+.pdf-preview {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 260px;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-elevated);
+  font-size: 12px;
+}
+
+.pdf-badge {
+  flex: none;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.pdf-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text);
+}
+
+.pdf-size {
+  flex: none;
+  color: var(--text-faint);
+  font-size: 11px;
+}
+
+.pdf-remove {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.pdf-remove:hover {
+  color: var(--danger);
 }
 
 .send {

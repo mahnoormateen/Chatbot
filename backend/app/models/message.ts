@@ -1,7 +1,8 @@
-import { belongsTo, column } from '@adonisjs/lucid/orm'
-import type { BelongsTo } from '@adonisjs/lucid/types/relations'
+import { belongsTo, column, hasMany } from '@adonisjs/lucid/orm'
+import type { BelongsTo, HasMany } from '@adonisjs/lucid/types/relations'
 import { MessageSchema } from '#database/schema'
 import type { ImageAttachment } from '#services/gemini_service'
+import Attachment from '#models/attachment'
 import Conversation from '#models/conversation'
 
 export default class Message extends MessageSchema {
@@ -16,6 +17,9 @@ export default class Message extends MessageSchema {
     prepare: (value: ImageAttachment[] | null) => (value == null ? null : JSON.stringify(value)),
   })
   declare images: ImageAttachment[] | null
+
+  @hasMany(() => Attachment, { foreignKey: 'messageId' })
+  declare attachments: HasMany<typeof Attachment>
 
   @belongsTo(() => Conversation, { foreignKey: 'conversationId' })
   declare conversation: BelongsTo<typeof Conversation>

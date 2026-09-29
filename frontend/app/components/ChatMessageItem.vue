@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { MessageImage } from '~/types/api'
+import type { ApiAttachment, MessageImage } from '~/types/api'
 import type { ChatMessage } from '~/composables/useChat'
 
 const props = defineProps<{ message: ChatMessage }>()
@@ -9,9 +9,53 @@ const copied = ref(false)
 /** Images attached to this message (user turns only in practice). */
 const messageImages = computed(() => props.message.images ?? [])
 
+/** Documents stored with this message, optimistic placeholder provided. */
+const messageAttachments = computed(() => props.message.attachments ?? [])
+
 /** Rebuilds the data URI the backend stripped for transport. */
 function imageSrc(image: MessageImage): string {
   return `data:${image.mimeType};base64,${image.data}`
+}
+
+/**
+ * Fetches the stored bytes with the bearer token and downloads them as a
+ * blob, so the document can be re-opened after it was sent. Optimistic
+ * rows (id 0, no backend id yet) are not clickable.
+ */
+async function openAttachment(attachment: ApiAttachment) {
+  if (!attachment.id || 'pending' in props.message) return
+
+  const api = useApi()
+  const { token } = useToken()
+
+  try {
+    const response = await fetch(
+      api.url(
+        `/api/conversations/${props.message.conversationId}/messages/${props.message.id}/attachments/${attachment.id}`
+      ),
+      { headers: token.value ? { Authorization: `Bearer ${token.value}` } : {} }
+    )
+    if (!response.ok) return
+
+    const blob = await response.blob()
+    const objectUrl = URL.createObjectURL(blob)
+    const anchor = document.createElement('a')
+    anchor.href = objectUrl
+    anchor.download = attachment.name
+    document.body.appendChild(anchor)
+    anchor.click()
+    anchor.remove()
+    setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000)
+  } catch {
+    // Opening the stored file is best effort; the chip stays visible.
+  }
+}
+
+/** Compact human readable size for a chip: 512 KB, 1.2 MB. */
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
 /**
@@ -63,6 +107,23 @@ async function copy() {
           :alt="`Attached image ${index + 1}`"
           loading="lazy"
         />
+      </div>
+
+      <div v-if="messageAttachments.length" class="attachments">
+        <button
+          v-for="(attachment, index) in messageAttachments"
+          :key="attachment.id || `local-${index}`"
+          class="chip"
+          type="button"
+          :disabled="!attachment.id"
+          :aria-label="attachment.id ? `Open ${attachment.name}` : attachment.name"
+          :title="attachment.id ? 'Open document' : undefined"
+          @click="openAttachment(attachment)"
+        >
+          <span class="badge" aria-hidden="true">PDF</span>
+          <span class="name">{{ attachment.name }}</span>
+          <span class="size">{{ formatBytes(attachment.size) }}</span>
+        </button>
       </div>
 
       <div v-if="isWaiting" class="typing" role="status" aria-label="Gemini is thinking">
@@ -132,6 +193,54 @@ async function copy() {
   border: 1px solid var(--border);
   object-fit: cover;
   background: var(--bg-elevated);
+}
+
+.attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 320px;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-elevated);
+  font-size: 12px;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.chip:disabled {
+  cursor: default;
+}
+
+.badge {
+  flex: none;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.size {
+  flex: none;
+  color: var(--text-faint);
+  font-size: 11px;
 }
 
 .footer {

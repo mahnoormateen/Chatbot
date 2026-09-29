@@ -15,12 +15,26 @@ const IMAGE_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/heic',
 export const MAX_IMAGE_DATA_LENGTH = 8_000_000
 
 /**
+ * Upper bound for the base64 of one PDF. 11.2M characters is roughly an
+ * 8 MB document, matching the per-file ceiling in config/gemini.ts. The
+ * service decodes and re-measures, so this only rejects the obviously
+ * oversized early.
+ */
+export const MAX_PDF_DATA_LENGTH = 11_200_000
+
+/** A PDF the client wants to attach to the turn it is sending. */
+export type PdfAttachmentInput = {
+  name: string
+  data: string
+}
+
+/**
  * Validator for sending a chat message.
  *
- * Content is now optional because a message may carry only images. The
- * controller rejects a payload that has neither, so an empty turn can
- * never be sent. The model stays optional so the conversation default is
- * used when it is omitted.
+ * Content is optional because a message may carry only images or a PDF,
+ * but the controller rejects a payload with none of them, so an empty
+ * turn can never be sent. The model stays optional so the conversation
+ * default is used when it is omitted.
  */
 export const storeMessageValidator = vine.create({
   content: vine.string().trim().maxLength(32_000).optional(),
@@ -30,6 +44,15 @@ export const storeMessageValidator = vine.create({
       vine.object({
         mimeType: vine.enum(IMAGE_MIME_TYPES),
         data: vine.string().trim().minLength(1).maxLength(MAX_IMAGE_DATA_LENGTH),
+      })
+    )
+    .maxLength(3)
+    .optional(),
+  pdfs: vine
+    .array(
+      vine.object({
+        name: vine.string().trim().minLength(1).maxLength(255),
+        data: vine.string().trim().minLength(1).maxLength(MAX_PDF_DATA_LENGTH),
       })
     )
     .maxLength(3)

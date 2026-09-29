@@ -7,6 +7,7 @@ import type {
   ApiMessage,
   ApiModel,
   MessageImage,
+  PdfInput,
   PendingMessage,
 } from '~/types/api'
 
@@ -288,9 +289,13 @@ export function useChat() {
    * optimistic rows are replaced by the persisted messages once the
    * backend reports them in the "done" event.
    */
-  async function sendMessage(content: string, images: MessageImage[] = []): Promise<void> {
+  async function sendMessage(
+    content: string,
+    images: MessageImage[] = [],
+    pdfs: PdfInput[] = []
+  ): Promise<void> {
     const trimmed = content.trim()
-    if ((!trimmed && images.length === 0) || sending.value) return
+    if ((!trimmed && images.length === 0 && pdfs.length === 0) || sending.value) return
 
     let conversationId = activeId.value
     if (conversationId === null) {
@@ -309,6 +314,13 @@ export function useChat() {
       role: 'user',
       content: trimmed,
       images,
+      attachments: pdfs.map((pdf) => ({
+        // Placeholder: the real id is assigned when the turn is stored.
+        id: 0,
+        name: pdf.name,
+        mimeType: 'application/pdf',
+        size: Math.round((pdf.data.length * 3) / 4),
+      })),
       createdAt: now,
       pending: true,
     })
@@ -333,8 +345,8 @@ export function useChat() {
         },
         body: JSON.stringify(
           selectedModel.value
-            ? { content: trimmed, model: selectedModel.value, images }
-            : { content: trimmed, images }
+            ? { content: trimmed, model: selectedModel.value, images, pdfs }
+            : { content: trimmed, images, pdfs }
         ),
       })
 
