@@ -26,6 +26,14 @@ export default defineNuxtConfig({
    * returns for any path, because the client decides what to show.
    */
   modules: [
+    /**
+     * Every component, composable and design token in the app comes from
+     * this module: it registers the U* components, pulls in Tailwind CSS
+     * v4 and the colour mode module, and generates the per component
+     * theme files that the components import from "#build/ui/*".
+     */
+    '@nuxt/ui',
+
     function catchAllPage(_options, nuxt) {
       nuxt.hook('pages:extend', (pages) => {
         pages.push({
@@ -45,7 +53,24 @@ export default defineNuxtConfig({
     },
   ],
 
+  /**
+   * The single stylesheet entry. It imports Tailwind and the Nuxt UI
+   * theme layer, so nothing else in the app has to load CSS itself, and
+   * then adds the few rules that cannot be expressed as a utility class:
+   * the markdown surface and the syntax highlighting palette.
+   */
   css: ['~/assets/css/main.css'],
+
+  /**
+   * Supplied by @nuxt/ui, listed here to be explicit. "system" follows
+   * the operating system and "dark" is the palette used until the
+   * preference has been read, which keeps a light preferring machine
+   * from flashing the dark background on the first paint.
+   */
+  colorMode: {
+    preference: 'system',
+    fallback: 'dark',
+  },
 
   /**
    * Preferred port for the dev server, matching the backend's CORS
@@ -77,22 +102,6 @@ export default defineNuxtConfig({
       meta: [
         { name: 'viewport', content: 'width=device-width, initial-scale=1' },
         { name: 'description', content: 'Chat with the Gemini API through an AdonisJS backend.' },
-      ],
-
-      /**
-       * Puts the saved theme on <html> before the first paint.
-       *
-       * Without this the document renders with the dark palette from
-       * main.css and only swaps once Vue hydrates, so a reload on the
-       * light theme shows a dark flash first. It has to be an inline
-       * script in <head> for that reason, which is also why the
-       * storage key is repeated here instead of imported from
-       * app/composables/useTheme.ts; keep the two in step.
-       */
-      script: [
-        {
-          innerHTML: `(function(){try{var s=localStorage.getItem('gemini_chatbot.theme');var t=(s==='light'||s==='dark')?s:(window.matchMedia('(prefers-color-scheme: light)').matches?'light':'dark');document.documentElement.dataset.theme=t;}catch(e){document.documentElement.dataset.theme='dark';}})()`,
-        },
       ],
     },
   },

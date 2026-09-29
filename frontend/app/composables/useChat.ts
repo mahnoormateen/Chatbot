@@ -24,6 +24,13 @@ export type ChatMessage = ApiMessage | PendingMessage
  */
 export type SendPhase = 'thinking' | 'writing' | null
 
+/**
+ * What the chat components call the state of a turn. Shared by the
+ * transcript, which shows a "submitted" indicator, and the composer,
+ * whose submit button turns into a stop button while streaming.
+ */
+export type ChatStatus = 'submitted' | 'streaming' | 'ready'
+
 type StreamEvent =
   | { type: 'chunk'; chunk: string }
   | { type: 'done'; model: string; message: ApiMessage }
@@ -124,6 +131,13 @@ export function useChat() {
    */
   let refreshTimer: ReturnType<typeof setTimeout> | null = null
 
+  /**
+   * Aborts the request behind the turn currently in flight, which is how
+   * the composer's stop button is wired. Null whenever nothing is being
+   * streamed.
+   */
+  let streamAbort: AbortController | null = null
+
   const activeConversation = computed(
     () => conversations.value.find((conversation) => conversation.id === activeId.value) ?? null
   )
@@ -149,6 +163,18 @@ export function useChat() {
   const activeModelName = computed(
     () => activeConversation.value?.model || selectedModel.value || ''
   )
+
+  /**
+   * The turn in flight, in the vocabulary the chat components use: a
+   * request that has been sent but has produced nothing yet is
+   * "submitted", one that is writing is "streaming", and everything else
+   * is "ready". A failure is reported separately by "error", so it never
+   * has to be squashed into one value here.
+   */
+  const status = computed<ChatStatus>(() => {
+    if (!sending.value) return 'ready'
+    return sendPhase.value === 'writing' ? 'streaming' : 'submitted'
+  })
 
   function clearError(): void {
     error.value = null
@@ -335,6 +361,8 @@ export function useChat() {
       pending: true,
     })
 
+    streamAbort = new AbortController()
+
     try {
       const response = await fetch(api.url(`/api/conversations/${conversationId}/messages/stream`), {
         method: 'POST',
@@ -343,6 +371,7 @@ export function useChat() {
           'Content-Type': 'application/json',
           ...(token.value ? { Authorization: `Bearer ${token.value}` } : {}),
         },
+        signal: streamAbort.signal,
         body: JSON.stringify(
           selectedModel.value
             ? { content: trimmed, model: selectedModel.value, images, pdfs }
@@ -391,6 +420,17 @@ export function useChat() {
 
       await loadConversations()
     } catch (caught) {
+      /**
+       * A stop is a deliberate act, not a failure: the reply that did
+       * arrive is kept as typed, nothing is offered for retry, and the
+       * transcript is reloaded to agree with the server, which stores a
+       * turn atomically and therefore holds nothing for a cancelled one.
+       */
+      if (streamAbort?.signal.aborted) {
+        await openConversation(conversationId).catch(() => {})
+        return
+      }
+
       // Drop the empty placeholder bubble so the transcript is not left hanging.
       const index = messages.value.findIndex((message) => message.id === replyId)
       const reply = index === -1 ? undefined : messages.value[index]
@@ -422,8 +462,17 @@ export function useChat() {
       // failure is restored: that is what the user needs to act on.
       error.value = failure
     } finally {
+      streamAbort = null
       sending.value = false
     }
+  }
+
+  /**
+   * Cancels the turn in flight. The partial answer stays on screen, the
+   * transcript is reloaded from the server, and no error is raised.
+   */
+  function stop(): void {
+    streamAbort?.abort()
   }
 
   /** Sends the question again after a failed turn. */
@@ -440,6 +489,8 @@ export function useChat() {
    * next user never sees the previous transcript.
    */
   function reset(): void {
+    streamAbort?.abort()
+    streamAbort = null
     conversations.value = []
     activeId.value = null
     messages.value = []
@@ -465,6 +516,7 @@ export function useChat() {
     loadingModels,
     sending,
     sendPhase,
+    status,
     activeModelName,
     error,
     canRetry: computed(() => Boolean(lastFailedPrompt.value)),
@@ -476,6 +528,7 @@ export function useChat() {
     renameConversation,
     sendMessage,
     retryLastMessage,
+    stop,
     clearError,
     reset,
   }

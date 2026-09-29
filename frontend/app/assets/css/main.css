@@ -1,340 +1,326 @@
 /* ------------------------------------------------------------------
-   Design tokens
+   Tailwind CSS and the Nuxt UI theme layer.
 
-   Every colour in the app comes from one of the names below, so adding
-   a palette means adding a block here and changing nothing else.
+   "theme(static)" is what @nuxt/ui expects: it writes every theme value
+   as a plain CSS variable so the components can be re-coloured at run
+   time by the colour mode module and by the "ui" keys in app.config.ts.
+   ------------------------------------------------------------------ */
+@import "tailwindcss" theme(static);
+@import "@nuxt/ui";
 
-   The dark palette is the default and sits on a bare ":root", which
-   keeps the current look when no theme attribute is present at all. The
-   light palette redefines the exact same names under a
-   "[data-theme='light']" attribute that "useTheme" writes onto <html>.
+/* ------------------------------------------------------------------
+   Syntax highlighting palette.
+
+   highlight.js token names are mapped onto these below, so switching
+   colour mode only has to redefine the variables and never the rules.
    ------------------------------------------------------------------ */
 :root {
-  /* Tells the browser to render native widgets, scrollbars and form
-     controls for this palette instead of the operating system default. */
-  color-scheme: dark;
-
-  --bg: #0e1014;
-  --bg-elevated: #161a21;
-  --bg-raised: #1d222b;
-  --bg-hover: #242a35;
-  --border: #2a303b;
-  --border-strong: #3a4250;
-
-  --text: #e6e9ef;
-  --text-muted: #98a2b3;
-  --text-faint: #7d8798;
-
-  --accent: #6d8cff;
-  --accent-strong: #8aa4ff;
-  --accent-soft: rgba(109, 140, 255, 0.14);
-  --accent-border: rgba(109, 140, 255, 0.3);
-  /* Text drawn on top of a solid --accent surface, e.g. the Send button. */
-  --accent-fg: #0b0e14;
-
-  --danger: #f2777a;
-  --danger-soft: rgba(242, 119, 122, 0.12);
-  --danger-border: rgba(242, 119, 122, 0.35);
-  /* Text drawn on top of a solid --danger surface. */
-  --danger-fg: #241013;
-
-  --shadow-color: rgba(0, 0, 0, 0.28);
-
-  --radius: 10px;
-  --radius-lg: 14px;
-
-  --sidebar-width: 288px;
-
-  /* Syntax highlighting palette (GitHub-dark inspired). The code uses the
-     same structural tokens as prose: string/comment/number/keyword are
-     named, so both themes can swap them without touching the component. */
-  --code-comment: #7d8798;
-  --code-keyword: #8aa4ff;
-  --code-string: #7ee2a8;
-  --code-number: #f2a45c;
-  --code-title: #d9a0ff;
-  --code-builtin: #6dbeff;
-  --code-variable: #e6e9ef;
-  --code-meta: #98a2b3;
-  --code-addition: #7ee2a8;
-  --code-deletion: #f2777a;
+  --code-comment: #6a737d;
+  --code-keyword: #d73a49;
+  --code-string: #22863a;
+  --code-number: #005cc5;
+  --code-title: #6f42c1;
+  --code-builtin: #e36209;
+  --code-variable: #24292e;
+  --code-meta: #6a737d;
+  --code-addition: #22863a;
+  --code-deletion: #b31d28;
 }
 
-:root[data-theme='light'] {
-  color-scheme: light;
-
-  /* Elevation runs the other way in light mode: a higher surface is
-     whiter, so buttons and the sidebar still separate from the page. */
-  --bg: #eef0f4;
-  --bg-elevated: #f8f9fb;
-  --bg-raised: #ffffff;
-  --bg-hover: #e8ebf1;
-  --border: #dfe3ea;
-  --border-strong: #c3c9d4;
-
-  --text: #141821;
-  --text-muted: #5b6472;
-  --text-faint: #6e7788;
-
-  /* A darker accent than the dark palette uses: the light one sits on
-     white, where the pale blue would not clear the contrast minimum. */
-  --accent: #3a5ccc;
-  --accent-strong: #2b48a8;
-  --accent-soft: rgba(58, 92, 204, 0.1);
-  --accent-border: rgba(58, 92, 204, 0.28);
-  --accent-fg: #ffffff;
-
-  --danger: #cc2f36;
-  --danger-soft: rgba(204, 47, 54, 0.1);
-  --danger-border: rgba(204, 47, 54, 0.32);
-  --danger-fg: #ffffff;
-
-  --shadow-color: rgba(20, 24, 33, 0.1);
-
-  /* GitHub-light inspired tokens for the light palette. */
-  --code-comment: #57606a;
-  --code-keyword: #3a5ccc;
-  --code-string: #1a7f37;
-  --code-number: #b35900;
-  --code-title: #8250df;
-  --code-builtin: #0550ae;
-  --code-variable: #1f2328;
-  --code-meta: #59636e;
-  --code-addition: #1a7f37;
-  --code-deletion: #cf222e;
+.dark {
+  --code-comment: #8b949e;
+  --code-keyword: #ff7b72;
+  --code-string: #a5d6ff;
+  --code-number: #79c0ff;
+  --code-title: #d2a8ff;
+  --code-builtin: #ffa657;
+  --code-variable: #c9d1d9;
+  --code-meta: #8b949e;
+  --code-addition: #a5d6ff;
+  --code-deletion: #ffdcd7;
 }
 
-* {
-  box-sizing: border-box;
-}
-
+/* The transcript is the scrolling region of the page, so it fills the
+   viewport rather than the body, which stops the page itself from ever
+   scrolling behind a fixed header. */
 html,
 body,
 #__nuxt {
   height: 100%;
 }
 
-body {
-  margin: 0;
-  background: var(--bg);
-  color: var(--text);
-  font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial,
-    sans-serif;
-  font-size: 15px;
-  line-height: 1.6;
-  -webkit-font-smoothing: antialiased;
-}
-
-button {
-  font: inherit;
-  color: inherit;
-  cursor: pointer;
-  border: none;
-  background: none;
-}
-
-button:disabled {
-  cursor: not-allowed;
-  opacity: 0.55;
-}
-
-input,
-textarea,
-select {
-  font: inherit;
-  color: inherit;
-}
-
-/* ------------------------------------------------------------------
-   Shared primitives
-   ------------------------------------------------------------------ */
-.btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 9px 16px;
-  border-radius: var(--radius);
-  border: 1px solid var(--border-strong);
-  background: var(--bg-raised);
-  font-weight: 500;
-  transition: background 0.15s ease, border-color 0.15s ease, opacity 0.15s ease;
-}
-
-.btn:hover:not(:disabled) {
-  background: var(--bg-hover);
-}
-
-.btn-primary {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: var(--accent-fg);
-  font-weight: 600;
-}
-
-.btn-primary:hover:not(:disabled) {
-  background: var(--accent-strong);
-  border-color: var(--accent-strong);
-}
-
-.btn-danger {
-  background: var(--danger);
-  border-color: var(--danger);
-  color: var(--danger-fg);
-  font-weight: 600;
-}
-
-.btn-danger:hover:not(:disabled) {
-  background: var(--danger);
-  filter: brightness(1.1);
-}
-
-.btn-ghost {
-  background: transparent;
-  border-color: transparent;
-  color: var(--text-muted);
-  padding: 6px 10px;
-}
-
-.btn-ghost:hover:not(:disabled) {
-  background: var(--bg-hover);
-  color: var(--text);
-}
-
-/* Light/dark switch. Both icons are kept in the DOM and a global rule
-   picks one from the data-theme attribute on <html>, so a scoped style
-   (which would otherwise have to fight this selector) is not involved. */
-.theme-toggle {
-  line-height: 1;
-}
-
-.theme-toggle .to-dark {
-  display: none;
-}
-
-:root:not([data-theme='light']) .theme-toggle .to-light {
-  display: block;
-}
-
-:root[data-theme='light'] .theme-toggle .to-light {
-  display: none;
-}
-
-:root[data-theme='light'] .theme-toggle .to-dark {
-  display: block;
-}
-
-.btn-block {
-  width: 100%;
-}
-
-.field {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.field label {
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--text-muted);
-}
-
-.field input,
-.field textarea,
-.field select {
-  padding: 10px 12px;
-  border-radius: var(--radius);
-  border: 1px solid var(--border);
-  background: var(--bg);
-  outline: none;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
-}
-
-.field input:focus,
-.field textarea:focus,
-.field select:focus {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-soft);
-}
-
-.alert {
-  padding: 10px 12px;
-  border-radius: var(--radius);
-  border: 1px solid var(--danger-border);
-  background: var(--danger-soft);
-  color: var(--danger);
-  font-size: 14px;
-}
-
-/* Placeholder rows shown while a transcript is loading. */
-.skeletons {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-
-.skeleton {
-  height: 46px;
-  border-radius: var(--radius-lg);
-  border: 1px solid var(--border);
-  background: linear-gradient(90deg, var(--bg-elevated) 25%, var(--bg-raised) 50%, var(--bg-elevated) 75%);
-  background-size: 200% 100%;
-  animation: shimmer 1.4s ease-in-out infinite;
-}
-
-.skeleton-short {
-  width: 55%;
-  margin-left: auto;
-}
-
-.skeleton-mid {
-  width: 78%;
-}
-
-@keyframes shimmer {
-  to {
-    background-position: -200% 0;
+/* Blinking block at the live end of a streaming answer. Defined here
+   because Tailwind has no such keyframe of its own; the class below
+   refers to it by name. */
+@keyframes blink {
+  50% {
+    opacity: 0;
   }
 }
 
+.caret {
+  display: inline-block;
+  width: 2px;
+  height: 1.05em;
+  margin-inline-start: 2px;
+  vertical-align: text-bottom;
+  border-radius: 1px;
+  background: var(--ui-primary);
+  animation: blink 1s steps(2, start) infinite;
+}
+
+/*
+   Every message row is given a header so the day divider has somewhere to
+   go. A row that does not open a day leaves it empty, and an empty header
+   must not push the bubble down.
+*/
+.chat-transcript [data-slot="header"]:empty {
+  display: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .skeleton {
+  .caret {
     animation: none;
   }
 }
 
-.spinner {
-  width: 15px;
-  height: 15px;
-  border-radius: 50%;
-  border: 2px solid currentColor;
-  border-top-color: transparent;
-  animation: spin 0.7s linear infinite;
+/* ------------------------------------------------------------------
+   Rendered markdown.
+
+   The model answer is produced by markdown-it and injected with
+   v-html, so it cannot be styled with utility classes: Tailwind never
+   sees this markup. These rules are therefore global, namespaced under
+   "rich-", and written against the Nuxt UI semantic variables so they
+   follow the active colour mode.
+   ------------------------------------------------------------------ */
+.rich-text {
+  overflow-wrap: anywhere;
+  line-height: 1.7;
 }
 
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
+.rich-text > :first-child {
+  margin-top: 0;
 }
 
-/* Screen reader only text. */
-.sr-only {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
+.rich-text > :last-child {
+  margin-bottom: 0;
+}
+
+.rich-text p {
+  margin: 0 0 10px;
+}
+
+.rich-text h1,
+.rich-text h2,
+.rich-text h3,
+.rich-text h4 {
+  margin: 18px 0 8px;
+  line-height: 1.3;
+  font-weight: 650;
+  color: var(--ui-text-highlighted);
+}
+
+.rich-text h1 {
+  font-size: 1.3em;
+}
+
+.rich-text h2 {
+  font-size: 1.18em;
+}
+
+.rich-text h3 {
+  font-size: 1.08em;
+}
+
+.rich-text h4 {
+  font-size: 1em;
+}
+
+.rich-text ul,
+.rich-text ol {
+  margin: 0 0 10px;
+  padding-left: 22px;
+  list-style: revert;
+}
+
+.rich-text li {
+  margin: 3px 0;
+}
+
+.rich-text li::marker {
+  color: var(--ui-text-dimmed);
+}
+
+.rich-text blockquote {
+  margin: 0 0 10px;
+  padding: 2px 12px;
+  border-left: 3px solid var(--ui-border-accented);
+  color: var(--ui-text-muted);
+}
+
+.rich-text a {
+  color: var(--ui-primary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.rich-text hr {
+  border: none;
+  border-top: 1px solid var(--ui-border);
+  margin: 14px 0;
+}
+
+.rich-text img {
+  max-width: 100%;
+  border-radius: var(--ui-radius);
+}
+
+.rich-text :not(pre) > code {
+  padding: 1px 5px;
+  border: 1px solid var(--ui-border);
+  border-radius: 5px;
+  background: var(--ui-bg-elevated);
+  color: var(--ui-text-highlighted);
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
+  font-size: 0.9em;
+}
+
+.rich-text table {
+  margin: 0 0 10px;
+  border-collapse: collapse;
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.rich-text th,
+.rich-text td {
+  padding: 6px 10px;
+  border: 1px solid var(--ui-border);
+  text-align: left;
+}
+
+.rich-text th {
+  background: var(--ui-bg-elevated);
+  color: var(--ui-text-highlighted);
+  font-weight: 600;
+}
+
+/* Code block shell with the language label and copy button. */
+.rich-code {
+  margin: 10px 0;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius);
+  background: var(--ui-bg-elevated);
   overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border: 0;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  * {
-    animation-duration: 0.01ms !important;
-    transition-duration: 0.01ms !important;
-  }
+.rich-code-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 5px 8px 5px 12px;
+  border-bottom: 1px solid var(--ui-border);
+  background: var(--ui-bg-muted);
+}
+
+.rich-code-lang {
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  color: var(--ui-text-dimmed);
+}
+
+.rich-code-copy {
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-size: 11.5px;
+  color: var(--ui-text-muted);
+}
+
+.rich-code-copy:hover {
+  background: var(--ui-bg-accented);
+  color: var(--ui-text);
+}
+
+.rich-code-copy.done {
+  color: var(--ui-primary);
+}
+
+.rich-code-pre {
+  margin: 0;
+  overflow-x: auto;
+}
+
+.rich-code-pre code {
+  display: block;
+  padding: 12px 14px;
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
+  font-size: 13px;
+  line-height: 1.6;
+  tab-size: 4;
+  color: var(--ui-text);
+  background: none;
+}
+
+/* Syntax token colours, theme aware through the --code-* variables. */
+.rich-text .hljs-comment,
+.rich-text .hljs-quote {
+  color: var(--code-comment);
+  font-style: italic;
+}
+
+.rich-text .hljs-keyword,
+.rich-text .hljs-selector-tag,
+.rich-text .hljs-literal,
+.rich-text .hljs-doctag {
+  color: var(--code-keyword);
+}
+
+.rich-text .hljs-string,
+.rich-text .hljs-regexp,
+.rich-text .hljs-addition {
+  color: var(--code-string);
+}
+
+.rich-text .hljs-number,
+.rich-text .hljs-symbol,
+.rich-text .hljs-bullet {
+  color: var(--code-number);
+}
+
+.rich-text .hljs-title,
+.rich-text .hljs-title.function_,
+.rich-text .hljs-section {
+  color: var(--code-title);
+}
+
+.rich-text .hljs-attr,
+.rich-text .hljs-attribute,
+.rich-text .hljs-variable,
+.rich-text .hljs-template-variable,
+.rich-text .hljs-built_in,
+.rich-text .hljs-type,
+.rich-text .hljs-params {
+  color: var(--code-builtin);
+}
+
+.rich-text .hljs-meta,
+.rich-text .hljs-selector-id,
+.rich-text .hljs-selector-class {
+  color: var(--code-meta);
+}
+
+.rich-text .hljs-deletion {
+  color: var(--code-deletion);
+}
+
+.rich-text .hljs-emphasis {
+  font-style: italic;
+}
+
+.rich-text .hljs-strong {
+  font-weight: 700;
 }

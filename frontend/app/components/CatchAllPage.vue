@@ -35,7 +35,7 @@ const attemptedPath = computed(() => route.fullPath)
       >. It may have been mistyped, or the conversation behind it was deleted.
     </p>
 
-    <NuxtLink class="btn btn-primary" to="/">Back to the chat</NuxtLink>
+    <UButton color="primary" variant="solid" to="/" label="Back to the chat" />
   </div>
 </template>
 
@@ -56,7 +56,7 @@ const attemptedPath = computed(() => route.fullPath)
   font-size: 13px;
   font-weight: 600;
   letter-spacing: 0.14em;
-  color: var(--text-faint);
+  color: var(--ui-text-dimmed);
 }
 
 h1 {
@@ -69,16 +69,16 @@ h1 {
   margin: 0 0 6px;
   max-width: 44ch;
   font-size: 14px;
-  color: var(--text-muted);
+  color: var(--ui-text-muted);
 }
 
 .path {
   padding: 1px 5px;
   border-radius: 6px;
-  border: 1px solid var(--border);
-  background: var(--bg-elevated);
+  border: 1px solid var(--ui-border);
+  background: var(--ui-bg-elevated);
   font-size: 13px;
-  color: var(--text);
+  color: var(--ui-text);
   overflow-wrap: anywhere;
 }
 </style>

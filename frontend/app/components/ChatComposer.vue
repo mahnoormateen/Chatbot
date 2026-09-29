@@ -1,9 +1,18 @@
 <script setup lang="ts">
 import type { ApiModel, MessageImage, PdfInput } from '~/types/api'
-import type { SendPhase } from '~/composables/useChat'
+import type { ChatStatus, SendPhase } from '~/composables/useChat'
 
+/**
+ * The composer: a chat prompt, the files pinned to the turn that is
+ * about to be sent, the model picker and the send or stop control.
+ *
+ * The turn itself is assembled here but sent by the page, which owns the
+ * chat store. Nothing in this component talks to the API.
+ */
 const props = defineProps<{
   sending: boolean
+  /** Drives the send button turning into a stop button. */
+  status: ChatStatus
   /** "thinking" before the first token, "writing" while it streams. */
   phase?: SendPhase
   /** Named in the status line so it is clear what is being waited on. */
@@ -18,13 +27,9 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   send: [content: string, images?: MessageImage[], pdfs?: PdfInput[]]
+  stop: []
   'update:modelValue': [value: string]
 }>()
-
-const selectedModel = computed({
-  get: () => props.modelValue,
-  set: (value: string) => emit('update:modelValue', value),
-})
 
 /**
  * A file staged in the composer, not sent yet. "data" is the base64
@@ -67,7 +72,7 @@ const MAX_PDF_BYTES = 8 * 1024 * 1024
 const MAX_PDF_TOTAL_BYTES = 12 * 1024 * 1024
 
 const draft = ref('')
-const textarea = ref<HTMLTextAreaElement | null>(null)
+const prompt = ref<{ textareaRef?: HTMLTextAreaElement } | null>(null)
 const fileInput = ref<HTMLInputElement | null>(null)
 const attachments = ref<StagedImage[]>([])
 const pdfs = ref<StagedPdf[]>([])
@@ -81,19 +86,9 @@ let dragDepth = 0
 /** Short label for the in flight turn. */
 const statusLabel = computed(() => {
   if (!props.sending) return ''
-  const model = props.model?.trim()
-  const subject = model ? model : 'Gemini'
+  const subject = props.model?.trim() || 'Gemini'
   return props.phase === 'writing' ? `${subject} is writing` : `${subject} is thinking`
 })
-
-/** Grows with the content up to a cap, then scrolls inside the box. */
-function autoGrow() {
-  const element = textarea.value
-  if (!element) return
-
-  element.style.height = 'auto'
-  element.style.height = `${Math.min(element.scrollHeight, 200)}px`
-}
 
 const canSend = computed(
   () =>
@@ -117,11 +112,8 @@ function submit() {
   pdfs.value = []
   attachError.value = ''
 
-  // Clear the box and shrink it back before the next message streams in.
-  nextTick(() => {
-    autoGrow()
-    textarea.value?.focus()
-  })
+  // Put the caret back for the next message as soon as the box is empty.
+  nextTick(() => prompt.value?.textareaRef?.focus())
 }
 
 /**
@@ -258,10 +250,6 @@ function readFileAsImage(file: File): Promise<{ image?: StagedImage; error?: str
   })
 }
 
-function removeImage(index: number) {
-  attachments.value.splice(index, 1)
-}
-
 /** Either the staged document or the reason it could not be staged. */
 function readFileAsPdf(file: File): Promise<{ pdf?: Omit<StagedPdf, 'size'>; error?: string }> {
   return new Promise((resolve) => {
@@ -280,20 +268,25 @@ function readFileAsPdf(file: File): Promise<{ pdf?: Omit<StagedPdf, 'size'>; err
   })
 }
 
+function removeImage(index: number) {
+  attachments.value.splice(index, 1)
+}
+
 function removePdf(index: number) {
   pdfs.value.splice(index, 1)
 }
 
-/** Compact human readable size for a chip: 512 KB, 1.2 MB. */
-function formatBytes(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`
-  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
-}
-
-/** Enter sends, Shift+Enter inserts a newline. */
+/**
+ * Enter sends, Shift+Enter inserts a newline.
+ *
+ * This runs alongside the prompt's own handler, which is why
+ * "submit-on-enter" is turned off on the prompt: otherwise a message with
+ * text would be sent twice. A composition in progress is left alone so
+ * an IME candidate is not committed by Enter.
+ */
 function onKeydown(event: KeyboardEvent) {
-  if (event.key !== 'Enter' || event.shiftKey) return
+  if (event.key !== 'Enter') return
+  if (event.shiftKey || event.isComposing || event.keyCode === 229) return
   event.preventDefault()
   submit()
 }
@@ -346,38 +339,16 @@ function onDrop(event: DragEvent) {
   const files = Array.from(event.dataTransfer?.files ?? [])
   stageFiles(files)
 }
-
-onMounted(autoGrow)
 </script>
 
 <template>
-  <form
-    class="composer"
-    :class="{ dragging: dragActive }"
-    @submit.prevent="submit"
+  <div
+    class="relative"
     @dragenter="onDragEnter"
     @dragover="onDragOver"
     @dragleave="onDragLeave"
     @drop="onDrop"
   >
-    <div v-if="dragActive" class="drop-overlay" aria-hidden="true">
-      <svg
-        viewBox="0 0 24 24"
-        width="28"
-        height="28"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="1.8"
-        stroke-linecap="round"
-        stroke-linejoin="round"
-      >
-        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-        <polyline points="17 8 12 3 7 8" />
-        <line x1="12" y1="3" x2="12" y2="15" />
-      </svg>
-      <span>Drop images or PDFs to pin them</span>
-    </div>
-
     <!--
       One input behind the pin button, covering both supported kinds of
       file. "accept" is a filter hint the browser shows in the file
@@ -386,386 +357,100 @@ onMounted(autoGrow)
     -->
     <input
       ref="fileInput"
-      class="file-input"
       type="file"
       accept="image/jpeg,image/png,image/webp,image/heic,image/heif,.pdf,application/pdf"
       multiple
+      class="sr-only"
       @change="onFilesPicked"
+    >
+
+    <!--
+      "as: div" turns the prompt into a plain container. Its own submit
+      handler refuses to fire when the box is empty, which would make an
+      attachment only turn impossible to send, and the send button below
+      is wired to "submit" here instead.
+    -->
+    <UChatPrompt
+      ref="prompt"
+      v-model="draft"
+      as="div"
+      :submit-on-enter="false"
+      :disabled="sending"
+      placeholder="Ask Gemini anything, or drop in a file"
+      variant="outline"
+      class="w-full"
+      :ui="{ footer: 'flex-col items-stretch gap-2 sm:flex-row sm:items-center' }"
+      @keydown="onKeydown"
+      @paste="onPaste"
+    >
+      <template #header>
+        <ChatStagedFiles
+          v-if="attachments.length || pdfs.length"
+          :images="attachments"
+          :pdfs="pdfs"
+          @remove-image="removeImage"
+          @remove-pdf="removePdf"
+        />
+      </template>
+
+      <template #footer>
+        <div class="flex items-center gap-1.5">
+          <UButton
+            icon="i-lucide-paperclip"
+            color="neutral"
+            variant="ghost"
+            size="sm"
+            square
+            aria-label="Pin images or PDFs"
+            :disabled="sending"
+            @click="openFilePicker"
+          />
+
+          <ModelPicker
+            :models="models"
+            :model-value="modelValue"
+            :loading="loadingModels"
+            :disabled="sending"
+            @update:model-value="emit('update:modelValue', $event)"
+          />
+
+          <span v-if="statusLabel" class="hidden truncate text-xs text-muted sm:inline">
+            {{ statusLabel }}
+          </span>
+        </div>
+
+        <div class="flex items-center justify-end">
+          <UChatPromptSubmit
+            :status="status"
+            :disabled="!canSend"
+            :on-click="status === 'ready' ? submit : undefined"
+            color="primary"
+            size="sm"
+            square
+            @stop="emit('stop')"
+          />
+        </div>
+      </template>
+    </UChatPrompt>
+
+    <UAlert
+      v-if="attachError"
+      color="warning"
+      variant="soft"
+      icon="i-lucide-triangle-alert"
+      class="mt-2"
+      :title="attachError"
+      :close="true"
+      @close="attachError = ''"
     />
 
     <div
-      v-if="attachments.length || pdfs.length"
-      class="previews"
-      role="list"
-      aria-label="Files to send"
+      v-if="dragActive"
+      class="pointer-events-none absolute inset-0 z-10 flex items-center justify-center gap-2 rounded-lg bg-default/85 ring-2 ring-primary backdrop-blur-sm"
+      aria-hidden="true"
     >
-      <figure v-for="(attachment, index) in attachments" :key="index" class="preview" role="listitem">
-        <img :src="`data:${attachment.mimeType};base64,${attachment.data}`" :alt="attachment.name" />
-        <button
-          class="remove"
-          type="button"
-          :aria-label="`Remove ${attachment.name}`"
-          @click="removeImage(index)"
-        >
-          ×
-        </button>
-        <figcaption class="name">{{ attachment.name }}</figcaption>
-      </figure>
-
-      <div v-for="(pdf, index) in pdfs" :key="`pdf-${index}`" class="pdf-preview" role="listitem">
-        <span class="pdf-badge" aria-hidden="true">PDF</span>
-        <span class="pdf-name">{{ pdf.name }}</span>
-        <span class="pdf-size">{{ formatBytes(pdf.size) }}</span>
-        <button
-          class="pdf-remove"
-          type="button"
-          :aria-label="`Remove ${pdf.name}`"
-          @click="removePdf(index)"
-        >
-          ×
-        </button>
-      </div>
+      <UIcon name="i-lucide-upload" class="size-6 text-primary" />
+      <span class="text-sm font-medium">Drop images or PDFs to pin them</span>
     </div>
-
-    <textarea
-      ref="textarea"
-      v-model="draft"
-      class="input"
-      rows="1"
-      :disabled="props.sending"
-      placeholder="Ask Gemini anything..."
-      aria-label="Message"
-      @input="autoGrow"
-      @keydown="onKeydown"
-      @paste="onPaste"
-    />
-
-    <div class="bar">
-      <div class="bar-actions">
-        <button
-          class="btn attach"
-          type="button"
-          :disabled="props.sending"
-          aria-label="Pin an image or PDF to this message"
-          title="Pin an image or PDF to this message"
-          @click="openFilePicker"
-        >
-          <svg
-            viewBox="0 0 24 24"
-            width="16"
-            height="16"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            aria-hidden="true"
-          >
-            <path
-              d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"
-            />
-          </svg>
-          <span>Pin</span>
-        </button>
-
-        <span v-if="attachError" class="error" role="status" aria-live="polite">
-          {{ attachError }}
-        </span>
-        <span v-else-if="statusLabel" class="status" role="status" aria-live="polite">
-          <span class="spinner" aria-hidden="true" />
-          {{ statusLabel }}
-        </span>
-        <span v-else class="hint">Enter to send | Shift+Enter for a new line | paste or drop files</span>
-      </div>
-
-      <div class="bar-end">
-        <ModelPicker
-          v-model="selectedModel"
-          :models="props.models"
-          :disabled="props.sending"
-          :loading="props.loadingModels"
-        />
-
-        <button class="btn btn-primary send" type="submit" :disabled="!canSend">
-          <span v-if="props.sending" class="spinner" aria-hidden="true" />
-          <span v-else>Send</span>
-        </button>
-      </div>
-    </div>
-  </form>
+  </div>
 </template>
-
-<style scoped>
-/*
- * The composer is the one raised surface in the column. It is drawn on a
- * slightly lighter token than the page so it reads as a card floating over
- * the transcript without needing a coloured band behind it, which is what
- * made the area look washed out in the light palette.
- */
-.composer {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 12px 14px;
-  border-radius: 18px;
-  border: 1px solid var(--border);
-  background: var(--bg-elevated);
-  /* A hairline highlight along the top edge plus a soft drop shadow, which
-     is what makes the card read as raised in both palettes. */
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.05),
-    0 10px 34px var(--shadow-color);
-  transition: border-color 0.18s ease, box-shadow 0.18s ease;
-}
-
-.composer:focus-within {
-  border-color: var(--accent-border);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.06),
-    0 0 0 3px var(--accent-soft),
-    0 14px 40px var(--shadow-color);
-}
-
-.composer.dragging {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-soft);
-}
-
-/* Full-composer hint shown while a file hovers over it. */
-.drop-overlay {
-  position: absolute;
-  inset: 0;
-  z-index: 2;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  border-radius: 18px;
-  border: 2px dashed var(--accent);
-  background: color-mix(in srgb, var(--bg-elevated) 88%, var(--accent) 12%);
-  color: var(--accent-strong);
-  font-size: 14px;
-  font-weight: 500;
-  pointer-events: none;
-}
-
-.input {
-  width: 100%;
-  max-height: 200px;
-  padding: 4px;
-  border: none;
-  background: transparent;
-  outline: none;
-  resize: none;
-  font-size: 15px;
-  line-height: 1.6;
-  overflow-y: auto;
-}
-
-.bar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-/* Model dropdown + Send, grouped at the right end of the composer bar. */
-.bar-end {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.bar-actions {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-width: 0;
-}
-
-.file-input {
-  display: none;
-}
-
-.attach {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 10px;
-  font-size: 12.5px;
-  color: var(--text-muted);
-}
-
-.attach:hover:not(:disabled) {
-  color: var(--accent-strong);
-  border-color: var(--accent-border);
-  background: var(--accent-soft);
-}
-
-.hint {
-  font-size: 11.5px;
-  color: var(--text-faint);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-/*
- * The rejection notice can name several files, so it wraps instead of
- * being truncated on one line. Capped at two lines so a large drop of
- * bad files cannot push the send button out of the composer.
- */
-.error {
-  max-width: 100%;
-  max-height: 2.6em;
-  font-size: 11.5px;
-  line-height: 1.3;
-  color: var(--danger);
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-
-.status {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  font-size: 11.5px;
-  color: var(--text-muted);
-}
-
-/* Staged image previews shown above the textarea. */
-.previews {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-}
-
-.preview {
-  position: relative;
-  margin: 0;
-  max-width: 140px;
-}
-
-.preview img {
-  display: block;
-  max-width: 140px;
-  max-height: 110px;
-  border-radius: var(--radius);
-  border: 1px solid var(--border);
-  object-fit: cover;
-  background: var(--bg-elevated);
-}
-
-.preview .remove {
-  position: absolute;
-  top: -8px;
-  right: -8px;
-  width: 20px;
-  height: 20px;
-  padding: 0;
-  border-radius: 50%;
-  border: 1px solid var(--border);
-  background: var(--bg-elevated);
-  color: var(--text-muted);
-  font-size: 13px;
-  line-height: 1;
-  cursor: pointer;
-}
-
-.preview .remove:hover {
-  color: var(--danger);
-  border-color: var(--danger);
-}
-
-.preview .name {
-  max-width: 140px;
-  margin-top: 3px;
-  font-size: 10.5px;
-  color: var(--text-faint);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-/* Staged PDF chips, shown beside the image previews. */
-.pdf-preview {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  max-width: 260px;
-  padding: 6px 10px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--bg-elevated);
-  font-size: 12px;
-}
-
-.pdf-badge {
-  flex: none;
-  padding: 1px 6px;
-  border-radius: 4px;
-  background: var(--accent-soft);
-  color: var(--accent-strong);
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-}
-
-.pdf-name {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--text);
-}
-
-.pdf-size {
-  flex: none;
-  color: var(--text-faint);
-  font-size: 11px;
-}
-
-.pdf-remove {
-  flex: none;
-  width: 18px;
-  height: 18px;
-  padding: 0;
-  border: none;
-  border-radius: 50%;
-  background: transparent;
-  color: var(--text-muted);
-  font-size: 13px;
-  line-height: 1;
-  cursor: pointer;
-}
-
-.pdf-remove:hover {
-  color: var(--danger);
-}
-
-/* Pill shaped so it reads as the primary action of the card. */
-.send {
-  min-width: 88px;
-  border-radius: 999px;
-  box-shadow: 0 4px 16px var(--accent-border);
-  transition: background 0.15s ease, transform 0.15s ease;
-}
-
-.send:hover:not(:disabled) {
-  transform: translateY(-1px);
-}
-
-@media (max-width: 640px) {
-  .hint {
-    display: none;
-  }
-
-  /* Keep the dropdown and Send side by side on phones. */
-  .bar-end :deep(select) {
-    max-width: 130px;
-  }
-}
-</style>
