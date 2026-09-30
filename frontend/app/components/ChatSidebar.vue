@@ -9,6 +9,11 @@ import type { ApiConversation } from '~/types/api'
  * breakpoint the same markup is shown inside a slideover, which is what
  * hides the list until the toggle is pressed.
  *
+ * Above it the header button collapses the rail to a narrow strip and
+ * expands it again. That only works because the sidebar is marked
+ * "collapsible": the resize composable drops every collapsed write
+ * otherwise, so the button would render and do nothing.
+ *
  * Each row is an explicit UButton with a sibling dropdown rather than a
  * UNavigationMenu: that component renders every row as a button of its
  * own, so a menu button nested inside one would be invalid markup and
@@ -29,6 +34,16 @@ const emit = defineEmits<{
 
 /** Whether the slideover copy is showing, so a pick can close it. */
 const mobileOpen = ref(false)
+
+/**
+ * Whether the desktop rail is collapsed to the narrow strip.
+ *
+ * Held here rather than only inside the sidebar slots so the header
+ * padding can react to it: the collapsed rail is 4rem wide, and at the
+ * usual "px-4" a 32px icon button no longer fits next to both margins.
+ */
+const collapsed = ref(false)
+
 const query = ref('')
 
 const filtered = computed(() => {
@@ -162,91 +177,106 @@ function commitDelete() {
   <UDashboardSidebar
     id="default"
     v-model:open="mobileOpen"
+    v-model:collapsed="collapsed"
     resizable
+    collapsible
     :min-size="13"
     :max-size="28"
     :default-size="17"
-    :ui="{ body: 'gap-2' }"
+    :ui="{
+      body: 'gap-2',
+      header: collapsed ? 'justify-center px-0' : '',
+    }"
   >
     <template #header>
-      <ChatLogo class="min-w-0 flex-1" />
-      <UDashboardSidebarCollapse />
+      <ChatLogo v-if="!collapsed" class="min-w-0 flex-1" />
+      <UDashboardSidebarCollapse class="mx-auto" />
     </template>
 
-    <UButton
-      icon="i-lucide-square-pen"
-      label="New conversation"
-      color="neutral"
-      variant="soft"
-      block
-      class="justify-start"
-      @click="emit('create')"
-    />
+    <!--
+      The collapsed rail is 4rem wide, so there is no room for the list.
+      The body is hidden rather than squeezed: a visible expand button is
+      what makes the state reversible, and the button lives in the header
+      above this slot.
+    -->
+    <template #default>
+      <template v-if="!collapsed">
+        <UButton
+          icon="i-lucide-square-pen"
+          label="New conversation"
+          color="neutral"
+          variant="soft"
+          block
+          class="justify-start bg-primary text-primary-inverted"
+          @click="emit('create')"
+        />
 
-    <UInput
-      v-model="query"
-      icon="i-lucide-search"
-      placeholder="Search"
-      size="sm"
-      autocomplete="off"
-      :ui="{ base: 'bg-elevated/50' }"
-    />
+        <UInput
+          v-model="query"
+          icon="i-lucide-search"
+          placeholder="Search"
+          size="sm"
+          autocomplete="off"
+          :ui="{ base: 'bg-elevated/50' }"
+        />
 
-    <USkeleton v-if="props.loading" class="h-9 w-full" />
+        <USkeleton v-if="props.loading" class="h-9 w-full" />
 
-    <UAlert
-      v-else-if="!filtered.length"
-      :title="query.trim() ? 'Nothing matches that search' : 'No conversations yet'"
-      :description="query.trim() ? undefined : 'Start one above and it will appear here.'"
-      icon="i-lucide-message-square"
-      color="neutral"
-      variant="soft"
-    />
+        <UAlert
+          v-else-if="!filtered.length"
+          :title="query.trim() ? 'Nothing matches that search' : 'No conversations yet'"
+          :description="query.trim() ? undefined : 'Start one above and it will appear here.'"
+          icon="i-lucide-message-square"
+          color="neutral"
+          variant="soft"
+        />
 
-    <template v-else>
-      <section v-for="group in groups" :key="group.label">
-        <p class="px-2 pt-3 pb-1 text-xs font-semibold tracking-wide text-dimmed uppercase">
-          {{ group.label }}
-        </p>
+        <template v-else>
+          <section v-for="group in groups" :key="group.label">
+            <p class="px-2 pt-3 pb-1 text-xs font-semibold tracking-wide text-dimmed uppercase">
+              {{ group.label }}
+            </p>
 
-        <ul class="flex flex-col">
-          <li
-            v-for="conversation in group.conversations"
-            :key="conversation.id"
-            class="group/row relative"
-          >
-            <UButton
-              :label="conversation.title"
-              :active="conversation.id === props.activeId"
-              :active-variant="conversation.id === props.activeId ? 'soft' : undefined"
-              color="neutral"
-              variant="ghost"
-              block
-              class="w-full justify-start pe-9 hover:bg-elevated/60"
-              :title="conversation.title"
-              @click="select(conversation.id)"
-            />
+            <ul class="flex flex-col">
+              <li
+                v-for="conversation in group.conversations"
+                :key="conversation.id"
+                class="group/row relative"
+              >
+                <UButton
+                  :label="conversation.title"
+                  :active="conversation.id === props.activeId"
+                  :active-variant="conversation.id === props.activeId ? 'soft' : undefined"
+                  color="neutral"
+                  variant="ghost"
+                  block
+                  class="w-full justify-start pe-9 hover:bg-elevated/60"
+                  :title="conversation.title"
+                  @click="select(conversation.id)"
+                />
 
-            <UDropdownMenu
-              :items="actionsFor(conversation)"
-              :content="{ align: 'end' }"
-              class="absolute end-1 top-1/2 -translate-y-1/2 opacity-0 transition-opacity group-hover/row:opacity-100 focus-within:opacity-100"
-            >
-              <UButton
-                icon="i-lucide-ellipsis"
-                color="neutral"
-                variant="ghost"
-                size="xs"
-                aria-label="Conversation actions"
-              />
-            </UDropdownMenu>
-          </li>
-        </ul>
-      </section>
+                <UDropdownMenu
+                  :items="actionsFor(conversation)"
+                  :content="{ align: 'end' }"
+                  class="absolute end-1 top-1/2 -translate-y-1/2 opacity-0 transition-opacity group-hover/row:opacity-100 focus-within:opacity-100"
+                >
+                  <UButton
+                    icon="i-lucide-ellipsis"
+                    color="neutral"
+                    variant="ghost"
+                    size="xs"
+                    aria-label="Conversation actions"
+                  />
+                </UDropdownMenu>
+              </li>
+            </ul>
+          </section>
+        </template>
+      </template>
     </template>
 
     <template #footer>
-      <UserMenu class="w-full" />
+      <UserMenu v-if="!collapsed" class="w-full" />
     </template>
   </UDashboardSidebar>
 

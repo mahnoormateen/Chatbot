@@ -29,6 +29,23 @@ export type PdfAttachmentInput = {
 }
 
 /**
+ * Validator for editing a message that has already been sent.
+ *
+ * Only the text changes. The images and documents that went out with the
+ * original turn stay on the message, so there is nothing to accept for
+ * them here: re-uploading the same file would only produce a second copy
+ * of bytes that are already stored.
+ *
+ * Content is required rather than optional, unlike on a fresh turn. An
+ * edited turn keeps whatever it was attached to, so it is never a
+ * message that carries nothing but files.
+ */
+export const editMessageValidator = vine.create({
+  content: vine.string().trim().minLength(1).maxLength(32_000),
+  model: vine.string().trim().minLength(1).maxLength(128).optional(),
+})
+
+/**
  * Validator for sending a chat message.
  *
  * Content is optional because a message may carry only images or a PDF,

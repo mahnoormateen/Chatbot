@@ -10,7 +10,11 @@ import Message from '#models/message'
 import AttachmentService from '#services/attachment_service'
 import GeminiService from '#services/gemini_service'
 import MessageTransformer from '#transformers/message_transformer'
-import { storeMessageValidator, type PdfAttachmentInput } from '#validators/message'
+import {
+  editMessageValidator,
+  storeMessageValidator,
+  type PdfAttachmentInput,
+} from '#validators/message'
 import type { ImageAttachment } from '#services/gemini_service'
 import type User from '#models/user'
 
@@ -28,12 +32,15 @@ const MAX_TOTAL_INLINE_BYTES = 14 * 1024 * 1024
  * driver error, which is reported as a 500 carrying the failed query and
  * the Postgres error code. The bound is the range of a Postgres integer,
  * so an id that is well formed but could never exist is caught here too.
+ *
+ * Shared by every id in this file: conversation, message and attachment
+ * are all integer primary keys read from the path.
  */
-function conversationIdFrom(id: string): number {
+function idFrom(id: string): number {
   const parsed = Number(id)
 
   if (!/^\d+$/.test(id) || !Number.isSafeInteger(parsed) || parsed < 1 || parsed > 2_147_483_647) {
-    throw new Exception('That conversation id is not valid', {
+    throw new Exception('That id is not valid', {
       status: 400,
       code: 'E_INVALID_ID',
     })
@@ -46,10 +53,7 @@ function conversationIdFrom(id: string): number {
  * Scopes a conversation lookup to the authenticated user.
  */
 function findOwnedConversation(userId: number, id: string) {
-  return Conversation.query()
-    .where('id', conversationIdFrom(id))
-    .where('userId', userId)
-    .firstOrFail()
+  return Conversation.query().where('id', idFrom(id)).where('userId', userId).firstOrFail()
 }
 
 /**
@@ -445,6 +449,175 @@ export default class MessagesController {
   }
 
   /**
+   * Rewrites a question that was already sent and answers it again.
+   *
+   * Editing is a fork rather than a patch. Everything said after the
+   * edited message was an answer to the old wording, so it is removed and
+   * the turn is asked again from the history that preceded it. Keeping
+   * the replies instead would leave the transcript arguing with itself.
+   *
+   * The edited message keeps its id, its images and its documents: only
+   * the wording is replaced, so the files that went out with it are still
+   * the ones the model is asked about.
+   */
+  async edit({
+    auth,
+    params,
+    request,
+    containerResolver,
+    response,
+    logger,
+    serialize,
+  }: HttpContext) {
+    const user = auth.getUserOrFail()
+    const payload = await request.validateUsing(editMessageValidator)
+    const gemini = await containerResolver.make(GeminiService)
+    const attachmentService = await containerResolver.make(AttachmentService)
+
+    const conversation = await findOwnedConversation(user.id, params.conversationId)
+    await conversation.load('messages', (query) =>
+      query.orderBy('id', 'asc').preload('attachments')
+    )
+
+    const targetId = idFrom(params.messageId)
+    const index = conversation.messages.findIndex((message) => message.id === targetId)
+
+    /**
+     * Scoped to the loaded messages, so a message id from another
+     * conversation is a miss rather than a leak of whether it exists.
+     */
+    if (index === -1) {
+      throw new Exception('That message is not part of this conversation', {
+        status: 404,
+        code: 'E_MESSAGE_NOT_FOUND',
+      })
+    }
+
+    const target = conversation.messages[index]
+
+    /**
+     * Only the user's own turns can be reworded. Editing a reply would
+     * mean inventing what the model said, which is not something a
+     * conversation should ever record.
+     */
+    if (target.role !== 'user') {
+      throw new Exception('Only your own messages can be edited', {
+        status: 422,
+        code: 'E_NOT_EDITABLE',
+      })
+    }
+
+    const history = conversation.messages.slice(0, index)
+    const discarded = conversation.messages.slice(index + 1)
+
+    /**
+     * The bytes of the dropped turns are removed by hand: the rows go with
+     * the cascade when the messages are deleted, but a file on disk is not
+     * a row and would otherwise be left behind for good.
+     */
+    const orphans = discarded.flatMap((message) => message.attachments as Attachment[])
+    await attachmentService.destroyAll(orphans)
+
+    await Message.query()
+      .where('conversationId', conversation.id)
+      .where('id', '>', target.id)
+      .delete()
+
+    /**
+     * The reworded question replaces the old one in place, before the
+     * answer is asked, so a stream that fails still leaves the user
+     * holding the text they wrote rather than a question nobody
+     * answered.
+     */
+    target.content = payload.content
+    await target.save()
+
+    const model = payload.model || conversation.model || (await gemini.defaultModel())
+
+    const turn: PreparedTurn = {
+      conversation,
+      history,
+      /**
+       * False because the title is left alone here. It was derived from
+       * whichever message opened the conversation, and the user may also
+       * have renamed it by hand; neither is something a reword should
+       * silently undo.
+       */
+      isFirstTurn: false,
+      model,
+    }
+
+    const events = (async function* () {
+      let full = ''
+      let resolvedModel = turn.model
+
+      try {
+        const opened = await gemini.openStream({
+          model: turn.model,
+          prompt: payload.content,
+          history,
+          /**
+           * The files that went out with the original turn are replayed,
+           * so the model is asked about the same documents under the new
+           * wording.
+           */
+          images: (target.images ?? []) as ImageAttachment[],
+          attachments: target.attachments as Attachment[],
+          attachmentService,
+        })
+        resolvedModel = opened.model
+
+        for await (const chunk of opened.chunks) {
+          full += chunk
+          yield `data: ${JSON.stringify({ chunk })}\n\n`
+        }
+
+        /**
+         * The edited message already exists and already owns its
+         * attachments, so it is passed in rather than created, and no
+         * attachment is handed over to be claimed again.
+         */
+        const { assistantMessage } = await persistTurn(turn, {
+          content: payload.content,
+          reply: full.trim(),
+          userMessage: target,
+          model: resolvedModel,
+        })
+
+        const message = await serialize.withoutWrapping(
+          MessageTransformer.transform(assistantMessage)
+        )
+
+        yield `data: ${JSON.stringify({
+          done: true,
+          model: resolvedModel,
+          message,
+        })}\n\n`
+      } catch (error) {
+        logger.error({ err: error }, 'Unable to finish the edited Gemini answer stream')
+
+        const status = error instanceof GeminiError ? error.status : undefined
+
+        yield `data: ${JSON.stringify({
+          error: 'Unable to generate a reply',
+          status,
+        })}\n\n`
+      }
+    })()
+
+    response
+      .safeHeader('Content-Type', 'text/event-stream; charset=utf-8')
+      .safeHeader('Cache-Control', 'no-cache, no-transform')
+      .safeHeader('Connection', 'keep-alive')
+      .safeHeader('X-Accel-Buffering', 'no')
+
+    return response.stream(Readable.from(events), (error) => {
+      logger.error({ err: error }, 'Edited Gemini answer stream closed unexpectedly')
+      return ['Unable to stream the answer', 500]
+    })
+  }
+
+  /**
    * Serves the bytes of a stored attachment back to an authenticated
    * browser tab. The row has to belong to the message and the message to
    * the conversation, and the whole chain is scoped to the user, so one
@@ -453,9 +626,9 @@ export default class MessagesController {
    */
   async attachmentFile({ auth, params, response, containerResolver }: HttpContext) {
     const user = auth.getUserOrFail()
-    const conversationId = conversationIdFrom(params.conversationId)
-    const messageId = conversationIdFrom(params.messageId)
-    const attachmentId = conversationIdFrom(params.attachmentId)
+    const conversationId = idFrom(params.conversationId)
+    const messageId = idFrom(params.messageId)
+    const attachmentId = idFrom(params.attachmentId)
 
     const attachment = await Attachment.query()
       .where('id', attachmentId)

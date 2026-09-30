@@ -314,6 +314,57 @@ export function useChat() {
   }
 
   /**
+   * Posts a turn to a streaming endpoint and reports what comes back.
+   *
+   * Shared by sending and by editing: both open the same kind of stream,
+   * fill the same placeholder bubble and finish on the same "done"
+   * event. The only thing that differs is the URL, so it is passed in.
+   */
+  async function streamTurn(
+    path: string,
+    body: Record<string, unknown>,
+    replyId: string,
+    signal: AbortSignal
+  ): Promise<void> {
+    const response = await fetch(api.url(path), {
+      method: 'POST',
+      headers: {
+        Accept: 'text/event-stream',
+        'Content-Type': 'application/json',
+        ...(token.value ? { Authorization: `Bearer ${token.value}` } : {}),
+      },
+      signal,
+      body: JSON.stringify(body),
+    })
+
+    if (!response.ok || !response.headers.get('content-type')?.includes('text/event-stream')) {
+      throw new ApiError(`The API answered with status ${response.status}`, response.status)
+    }
+
+    let failure: StreamEvent | null = null
+
+    await readEventStream(response, (event) => {
+      const reply = messages.value.find((message) => message.id === replyId)
+
+      if (event.type === 'chunk') {
+        if (reply) reply.content += event.chunk
+      } else if (event.type === 'error') {
+        failure = event
+      } else if (event.type === 'done') {
+        const index = messages.value.findIndex((message) => message.id === replyId)
+        if (index !== -1) messages.value.splice(index, 1, event.message)
+      }
+    })
+
+    if (failure) {
+      // The stream already answered 200, so the upstream status has to
+      // be carried inside the event for the mapping to work.
+      const event = failure as Extract<StreamEvent, { type: 'error' }>
+      throw new ApiError(event.error, event.status ?? 502, { message: event.error })
+    }
+  }
+
+  /**
    * Sends a message and streams the reply back.
    *
    * The transcript is updated optimistically: the user message appears
@@ -370,49 +421,14 @@ export function useChat() {
     streamAbort = new AbortController()
 
     try {
-      const response = await fetch(api.url(`/api/conversations/${conversationId}/messages/stream`), {
-        method: 'POST',
-        headers: {
-          Accept: 'text/event-stream',
-          'Content-Type': 'application/json',
-          ...(token.value ? { Authorization: `Bearer ${token.value}` } : {}),
-        },
-        signal: streamAbort.signal,
-        body: JSON.stringify(
-          selectedModel.value
-            ? { content: trimmed, model: selectedModel.value, images, pdfs }
-            : { content: trimmed, images, pdfs }
-        ),
-      })
-
-      if (!response.ok || !response.headers.get('content-type')?.includes('text/event-stream')) {
-        throw new ApiError(
-          `The API answered with status ${response.status}`,
-          response.status
-        )
-      }
-
-      let failure: StreamEvent | null = null
-
-      await readEventStream(response, (event) => {
-        const reply = messages.value.find((message) => message.id === replyId)
-
-        if (event.type === 'chunk') {
-          if (reply) reply.content += event.chunk
-        } else if (event.type === 'error') {
-          failure = event
-        } else if (event.type === 'done') {
-          const index = messages.value.findIndex((message) => message.id === replyId)
-          if (index !== -1) messages.value.splice(index, 1, event.message)
-        }
-      })
-
-      if (failure) {
-        // The stream already answered 200, so the upstream status has to
-        // be carried inside the event for the mapping to work.
-        const event = failure as Extract<StreamEvent, { type: 'error' }>
-        throw new ApiError(event.error, event.status ?? 502, { message: event.error })
-      }
+      await streamTurn(
+        `/api/conversations/${conversationId}/messages/stream`,
+        selectedModel.value
+          ? { content: trimmed, model: selectedModel.value, images, pdfs }
+          : { content: trimmed, images, pdfs },
+        replyId,
+        streamAbort.signal
+      )
 
       /**
        * The turn is stored server side, so the optimistic rows are
@@ -469,6 +485,109 @@ export function useChat() {
 
       // "openConversation" clears the error on its way in, so the send
       // failure is restored: that is what the user needs to act on.
+      error.value = failure
+    } finally {
+      streamAbort = null
+      sending.value = false
+    }
+  }
+
+  /**
+   * Rewords a question that was already sent and streams a fresh answer.
+   *
+   * This is a fork, not a patch, so the transcript is rebuilt the same
+   * way: the old wording is replaced in place, the rows after it are
+   * dropped and a new placeholder answer is appended. The backend does
+   * the same thing to the conversation, so the two agree once "done"
+   * arrives.
+   */
+  async function editMessage(messageId: number, content: string): Promise<void> {
+    const trimmed = content.trim()
+    const conversationId = activeId.value
+
+    if (!trimmed || conversationId === null || sending.value) return
+
+    const index = messages.value.findIndex((message) => message.id === messageId)
+    const target = index === -1 ? undefined : messages.value[index]
+
+    /**
+     * Guarded here as well as in the adapter because the id arrives from
+     * a component: only a stored user turn carries one the backend can
+     * act on.
+     */
+    if (!target || 'pending' in target || target.role !== 'user') return
+
+    sending.value = true
+    error.value = null
+    lastFailedPrompt.value = null
+
+    /**
+     * Everything after the edited row is removed here rather than after
+     * the round trip, so the transcript stops contradicting itself
+     * immediately instead of waiting for the server to agree.
+     */
+    messages.value.splice(index + 1)
+    target.content = trimmed
+
+    const now = new Date().toISOString()
+    const replyId = nextTemporaryId()
+    messages.value.push({
+      id: replyId,
+      conversationId,
+      role: 'assistant',
+      content: '',
+      createdAt: now,
+      pending: true,
+    })
+
+    streamAbort = new AbortController()
+
+    try {
+      await streamTurn(
+        `/api/conversations/${conversationId}/messages/${messageId}/edit`,
+        selectedModel.value
+          ? { content: trimmed, model: selectedModel.value }
+          : { content: trimmed },
+        replyId,
+        streamAbort.signal
+      )
+
+      const detail = await api.get<ApiConversationDetail>(`/api/conversations/${conversationId}`)
+      messages.value = detail.messages
+      if (detail.model) selectedModel.value = detail.model
+
+      await loadConversations()
+    } catch (caught) {
+      /**
+       * A stop part way through leaves the reworded question on the
+       * server with no answer, which is a state worth showing rather
+       * than hiding, so it is reconciled and no banner is raised.
+       */
+      if (streamAbort?.signal.aborted) {
+        await openConversation(conversationId).catch(() => {})
+        return
+      }
+
+      const reply = messages.value.find((message) => message.id === replyId)
+      if (reply && !reply.content) {
+        messages.value.splice(messages.value.findIndex((message) => message.id === replyId), 1)
+      }
+
+      lastFailedPrompt.value = trimmed
+      const failure = toFriendlyError(caught, {
+        model: selectedModel.value || undefined,
+        action: 'getting a reply to the edited question',
+        scope: 'send',
+      })
+      error.value = failure
+
+      /**
+       * The backend rewrites the question before it asks, so a failure
+       * here still leaves the new wording stored. Reloading picks up
+       * whichever half of that the server actually holds.
+       */
+      await openConversation(conversationId).catch(() => {})
+
       error.value = failure
     } finally {
       streamAbort = null
@@ -536,6 +655,7 @@ export function useChat() {
     deleteConversation,
     renameConversation,
     sendMessage,
+    editMessage,
     retryLastMessage,
     stop,
     clearError,

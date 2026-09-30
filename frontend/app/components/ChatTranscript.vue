@@ -28,6 +28,10 @@ const props = defineProps<{
   spacingOffset?: number
 }>()
 
+const emit = defineEmits<{
+  edit: [messageId: number, content: string]
+}>()
+
 const api = useApi()
 const { token } = useToken()
 const toast = useToast()
@@ -149,6 +153,67 @@ async function copy(id: string, text: string) {
     })
   }
 }
+
+/**
+ * The question currently open in an editor, as a row id plus its draft.
+ *
+ * Null means no row is being edited. Only one can be open at a time,
+ * because editing a message drops everything after it and two open
+ * editors would both be describing a transcript that is about to change.
+ */
+const editingId = ref<string | null>(null)
+const draft = ref('')
+
+function startEdit(id: string, text: string) {
+  editingId.value = id
+  draft.value = text
+}
+
+function cancelEdit() {
+  editingId.value = null
+  draft.value = ''
+}
+
+function commitEdit(id: string) {
+  const trimmed = draft.value.trim()
+
+  // Cancelled rather than sent: an empty rewrite is a mistake, and the
+  // question as it stands is still a question.
+  if (!trimmed) {
+    cancelEdit()
+    return
+  }
+
+  const messageId = Number(id)
+
+  // The row has to be a stored one, or the API has no id to key on.
+  if (!Number.isSafeInteger(messageId) || messageId < 1) {
+    cancelEdit()
+    return
+  }
+
+  cancelEdit()
+  emit('edit', messageId, trimmed)
+}
+
+/**
+ * Enter saves, Shift+Enter breaks the line. Composition is respected so
+ * an IME can claim Enter for itself, matching the composer's own rule.
+ */
+function onEditKeydown(event: KeyboardEvent) {
+  if (event.key === 'Escape') {
+    event.preventDefault()
+    cancelEdit()
+    return
+  }
+
+  if (event.key !== 'Enter') return
+  if (event.shiftKey || event.ctrlKey || event.metaKey || event.altKey) return
+  if (event.isComposing) return
+
+  event.preventDefault()
+  if (editingId.value) commitEdit(editingId.value)
+}
 </script>
 
 <template>
@@ -157,7 +222,13 @@ async function copy(id: string, text: string) {
     :status="props.status"
     :should-auto-scroll="true"
     :spacing-offset="props.spacingOffset ?? 0"
-    :assistant="{ avatar: { icon: 'i-lucide-bot', alt: props.modelName || 'Gemini' } }"
+    :assistant="{
+  avatar: {
+    icon: 'i-lucide-bot',
+    alt: props.modelName || 'Gemini',
+    class: 'bg-primary text-primary-inverted',
+  },
+}"
     class="chat-transcript relative p-6"
   >
     <template #header="{ id }">
@@ -191,23 +262,78 @@ async function copy(id: string, text: string) {
       </template>
     </template>
 
-    <template #content="{ role, parts, metadata }">
-      <ChatRichText v-if="role === 'assistant'" :text="textOf(parts)" />
-      <p v-else class="whitespace-pre-wrap">{{ textOf(parts) }}</p>
-
+    <template #content="{ id, role, parts, metadata }">
       <!--
-        A row that is still arriving gets a caret, so an unfinished
-        sentence is not mistaken for a truncated one.
+        The editor replaces the row in place rather than opening above
+        it, so what is being reworded stays where the eye already is.
+        It is bound to the draft rather than to the message: typing must
+        not mutate the transcript, which is the server's account until
+        the edit is accepted.
       -->
-      <span
-        v-if="role === 'assistant' && metadata?.pending"
-        class="caret ml-0.5 inline-block h-[1.1em] w-0.5 translate-y-0.5 bg-current align-baseline"
-        aria-hidden="true"
-      />
+      <div v-if="editingId === id" class="w-full space-y-2" @keydown="onEditKeydown">
+        <UTextarea
+          v-model="draft"
+          autoresize
+          autofocus
+          :maxlength="32_000"
+          :ui="{ base: 'w-full' }"
+          class="w-full"
+        />
+
+        <div class="flex items-center gap-1.5">
+          <UButton
+            label="Save and resend"
+            size="xs"
+            :disabled="!draft.trim()"
+            @click="commitEdit(id)"
+          />
+          <UButton
+            label="Cancel"
+            color="neutral"
+            variant="ghost"
+            size="xs"
+            @click="cancelEdit"
+          />
+          <span class="text-xs text-dimmed">
+            Resending replaces the replies that came after it.
+          </span>
+        </div>
+      </div>
+
+      <template v-else>
+        <ChatRichText v-if="role === 'assistant'" :text="textOf(parts)" />
+        <p v-else class="whitespace-pre-wrap">{{ textOf(parts) }}</p>
+
+        <!--
+          A row that is still arriving gets a caret, so an unfinished
+          sentence is not mistaken for a truncated one.
+        -->
+        <span
+          v-if="role === 'assistant' && metadata?.pending"
+          class="caret ml-0.5 inline-block h-[1.1em] w-0.5 translate-y-0.5 bg-current align-baseline"
+          aria-hidden="true"
+        />
+      </template>
     </template>
 
     <template #actions="{ id, role, parts, metadata }">
       <span class="px-1.5 text-xs text-dimmed">{{ time(metadata?.createdAt) }}</span>
+
+      <!--
+        Hidden while that row is open in an editor: the Save and Cancel
+        below it already say what would happen, and offering both at once
+        invites the second one to be pressed by mistake.
+      -->
+      <UButton
+        v-if="metadata?.editable && editingId !== id"
+        icon="i-lucide-pencil"
+        color="neutral"
+        variant="ghost"
+        size="xs"
+        aria-label="Edit question"
+        @click="startEdit(id, textOf(parts))"
+      />
+
       <UButton
         v-if="role === 'assistant'"
         :icon="copied === id ? 'i-lucide-check' : 'i-lucide-copy'"

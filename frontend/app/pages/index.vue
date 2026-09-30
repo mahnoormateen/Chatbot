@@ -40,6 +40,7 @@ const {
   deleteConversation,
   renameConversation,
   sendMessage,
+  editMessage,
   retryLastMessage,
   stop,
   clearError,
@@ -144,6 +145,7 @@ const title = computed(() => activeConversation.value?.title || '')
                 :model-name="activeModelName"
                 :user-initials="initials"
                 :spacing-offset="200"
+                @edit="editMessage"
               />
             </div>
 

@@ -60,6 +60,15 @@ router
         router.post('/stream', [controllers.Messages, 'stream']).as('conversations.messages.stream')
 
         /**
+         * Rewrites a question that was already sent and answers it
+         * again. Streamed rather than buffered for the same reason as
+         * "stream": the client fills a bubble as the answer arrives.
+         */
+        router
+          .post('/:messageId/edit', [controllers.Messages, 'edit'])
+          .as('conversations.messages.edit')
+
+        /**
          * Downloads the bytes of a stored attachment, scoped to the
          * conversation, message and owner inside the controller.
          */

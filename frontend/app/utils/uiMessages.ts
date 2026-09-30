@@ -42,6 +42,13 @@ export interface UiMessageMetadata {
   attachments: ApiAttachment[]
   /** True while the row is optimistic and the backend has not stored it. */
   pending: boolean
+  /**
+   * Whether the row may be reworded.
+   *
+   * Only a stored user message can be: the backend keys the edit on a
+   * persisted id, and an assistant reply is the model's own wording.
+   */
+  editable: boolean
 }
 
 export interface UiMessage {
@@ -107,16 +114,26 @@ function toParts(message: ChatMessage): UiMessagePart[] {
  * the transcript needs it to decide where the streaming indicator goes.
  */
 export function toUiMessages(messages: ChatMessage[]): UiMessage[] {
-  return messages.map((message) => ({
-    id: String(message.id),
-    role: message.role,
-    parts: toParts(message),
-    metadata: {
-      createdAt: message.createdAt,
-      conversationId: message.conversationId,
-      images: message.images ?? [],
-      attachments: message.attachments ?? [],
-      pending: 'pending' in message,
-    },
-  }))
+  return messages.map((message) => {
+    const pending = 'pending' in message
+
+    return {
+      id: String(message.id),
+      role: message.role,
+      parts: toParts(message),
+      metadata: {
+        createdAt: message.createdAt,
+        conversationId: message.conversationId,
+        images: message.images ?? [],
+        attachments: message.attachments ?? [],
+        pending,
+        /**
+         * An optimistic row carries a "temp-n" id, so there is nothing on
+         * the server to reword yet. The check is on the role first
+         * because an assistant reply is never editable either way.
+         */
+        editable: !pending && message.role === 'user',
+      },
+    }
+  })
 }

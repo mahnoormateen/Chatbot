@@ -113,14 +113,15 @@ const items = computed<DropdownMenuItem[][]>(() => ([
         trailingIcon: collapsed ? undefined : 'i-lucide-chevrons-up-down'
       }"
       :avatar="{
-        text: user?.initials || '?',
-        alt: user?.fullName || user?.email
-      }"
+  text: user?.initials || '?',
+  alt: user?.fullName || user?.email,
+  class: 'bg-primary text-primary-inverted'
+}"
       color="neutral"
       variant="ghost"
       block
       :square="collapsed"
-      class="data-[state=open]:bg-elevated"
+      class="data-[state=open]:bg-elevated "
       :ui="{
         trailingIcon: 'text-dimmed'
       }"
