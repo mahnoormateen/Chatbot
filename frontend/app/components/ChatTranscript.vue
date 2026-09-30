@@ -217,6 +217,12 @@ function onEditKeydown(event: KeyboardEvent) {
 </script>
 
 <template>
+  <!--
+    The white goes on the icon slot, not the avatar root. The theme gives
+    the icon its own text colour (text-muted from the neutral variant),
+    and an element's own colour beats one inherited from its parent, so
+    a class on the root never reaches the glyph.
+  -->
   <UChatMessages
     :messages="props.messages"
     :status="props.status"
@@ -226,7 +232,8 @@ function onEditKeydown(event: KeyboardEvent) {
   avatar: {
     icon: 'i-lucide-bot',
     alt: props.modelName || 'Gemini',
-    class: 'bg-primary text-primary-inverted',
+    class: 'bg-primary',
+    ui: { icon: 'text-white' },
   },
 }"
     class="chat-transcript relative p-6"
