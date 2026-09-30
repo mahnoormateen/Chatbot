@@ -51,7 +51,7 @@ function readable(bytes: number): string {
         color="neutral"
         variant="solid"
         size="xs"
-        class="absolute -top-1.5 -right-1.5 opacity-0 transition-opacity group-hover/image:opacity-100 focus-visible:opacity-100"
+        class="absolute -top-1.5 -right-1.5 transition-opacity group-hover/image:opacity-100 focus-visible:opacity-100"
         :aria-label="`Remove ${image.name}`"
         @click="emit('remove-image', index)"
       />

@@ -31,7 +31,6 @@ const actions = computed<ButtonProps[]>(() =>
           label: 'Try again',
           color: 'error',
           variant: 'solid',
-          onClick: () => emit('retry'),
         },
       ]
     : []

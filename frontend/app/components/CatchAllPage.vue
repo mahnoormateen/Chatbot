@@ -6,7 +6,7 @@
  * "[...slug].vue" file, because Nuxt's page scanner silently skips a
  * file whose name contains glob characters such as "[", at least on
  * Windows, so the route would never exist. Registering the path
- * directly keeps the behaviour identical everywhere and makes the
+ * directly keeps the behavior identical everywhere and makes the
  * intent obvious in one place.
  *
  * Without a catch-all, vue-router has nothing to resolve an unknown

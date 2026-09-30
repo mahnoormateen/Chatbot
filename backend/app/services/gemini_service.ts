@@ -105,7 +105,8 @@ const FAILOVER_STATUSES = new Set([404, ...RETRYABLE_STATUSES])
  * that answer a text prompt with a sound file. They are matched out by
  * name.
  */
-const NON_CHAT_MODEL = /image|-tts|tts-|live|transcribe|robotics|computer-use|native-audio|omni|embedding|aqa/
+const NON_CHAT_MODEL =
+  /image|-tts|tts-|live|transcribe|robotics|computer-use|native-audio|omni|embedding|aqa/
 
 /**
  * What confirming a model with a real request found out.
@@ -218,10 +219,7 @@ export default class GeminiService {
     const usable = this.#selectable(entries)
 
     if (!usable.length) {
-      logger.warn(
-        { checked: entries.length },
-        'No Gemini tier could be resolved for this key yet'
-      )
+      logger.warn({ checked: entries.length }, 'No Gemini tier could be resolved for this key yet')
       return []
     }
 
@@ -368,21 +366,25 @@ export default class GeminiService {
    * returned here rather than what they asked for.
    */
   async generateReply(payload: ReplyPayload): Promise<{ model: string; text: string }> {
-    const { model, result } = await this.#withFailover('generateContent', payload.model, async (m) => {
-      const contents = await this.#buildContents(
-        payload.prompt,
-        payload.history,
-        payload.images,
-        payload.attachments,
-        payload.attachmentService
-      )
+    const { model, result } = await this.#withFailover(
+      'generateContent',
+      payload.model,
+      async (m) => {
+        const contents = await this.#buildContents(
+          payload.prompt,
+          payload.history,
+          payload.images,
+          payload.attachments,
+          payload.attachmentService
+        )
 
-      return this.#client.models.generateContent({
-        model: m,
-        contents,
-        config: this.#generationConfig(),
-      })
-    })
+        return this.#client.models.generateContent({
+          model: m,
+          contents,
+          config: this.#generationConfig(),
+        })
+      }
+    )
 
     return { model, text: result.text?.trim() || '' }
   }
@@ -603,10 +605,7 @@ export default class GeminiService {
 
     let timer: ReturnType<typeof setTimeout> | undefined
     const deadline = new Promise<ModelVerdict>((resolve) => {
-      timer = setTimeout(
-        () => resolve('limited'),
-        geminiConfig.discovery.probeTimeoutMs
-      )
+      timer = setTimeout(() => resolve('limited'), geminiConfig.discovery.probeTimeoutMs)
     })
 
     try {

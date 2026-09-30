@@ -19,7 +19,7 @@ const renderer = new MarkdownIt({
   linkify: true,
   breaks: true,
   highlight(code, lang): string {
-    // Only highlight when the language is known; the fallback colours
+    // Only highlight when the language is known; the fallback colors
     // generic code with the auto detector.
     if (lang && hljs.getLanguage(lang)) {
       try {

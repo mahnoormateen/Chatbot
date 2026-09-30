@@ -21,7 +21,13 @@ export default class extends BaseSchema {
         .inTable('conversations')
         .onDelete('CASCADE')
 
-      table.integer('message_id').unsigned().nullable().references('id').inTable('messages').onDelete('CASCADE')
+      table
+        .integer('message_id')
+        .unsigned()
+        .nullable()
+        .references('id')
+        .inTable('messages')
+        .onDelete('CASCADE')
 
       /** Original file name as the user knows it, for display only. */
       table.string('name', 255).notNullable()

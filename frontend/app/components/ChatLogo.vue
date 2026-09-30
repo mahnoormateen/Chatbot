@@ -2,7 +2,7 @@
 /**
  * The app mark shown at the top of the sidebar and on the signed out
  * screen. Drawn with an icon rather than a bespoke SVG so it inherits the
- * active colour from the theme instead of carrying a fixed palette.
+ * active color from the theme instead of carrying a fixed palette.
  */
 defineProps<{
   /** Hides the wordmark, leaving just the mark for a collapsed rail. */

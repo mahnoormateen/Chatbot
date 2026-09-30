@@ -258,7 +258,7 @@ function commitDelete() {
                 <UDropdownMenu
                   :items="actionsFor(conversation)"
                   :content="{ align: 'end' }"
-                  class="absolute end-1 top-1/2 -translate-y-1/2 opacity-0 transition-opacity group-hover/row:opacity-100 focus-within:opacity-100"
+                  class="absolute inset-e-1 top-1/2 -translate-y-1/2 transition-opacity group-hover/row:opacity-100 focus-within:opacity-100"
                 >
                   <UButton
                     icon="i-lucide-ellipsis"

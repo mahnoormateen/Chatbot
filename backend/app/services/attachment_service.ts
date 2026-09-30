@@ -127,7 +127,10 @@ export default class AttachmentService {
 
     void declaredSize
 
-    const relativePath = join(randomBytes(2).toString('hex'), `${randomBytes(16).toString('hex')}.pdf`)
+    const relativePath = join(
+      randomBytes(2).toString('hex'),
+      `${randomBytes(16).toString('hex')}.pdf`
+    )
     const target = this.#absolute(relativePath)
 
     await mkdir(dirname(target), { recursive: true })
@@ -153,7 +156,10 @@ export default class AttachmentService {
   async storeFromBase64(conversationId: number, name: string, data: string): Promise<Attachment> {
     const cleanName = name.trim()
     if (!cleanName) {
-      throw new Exception('The attachment has no file name', { status: 422, code: 'E_NO_FILE_NAME' })
+      throw new Exception('The attachment has no file name', {
+        status: 422,
+        code: 'E_NO_FILE_NAME',
+      })
     }
 
     if (!cleanName.toLowerCase().endsWith('.pdf')) {
@@ -187,7 +193,10 @@ export default class AttachmentService {
       })
     }
 
-    const relativePath = join(randomBytes(2).toString('hex'), `${randomBytes(16).toString('hex')}.pdf`)
+    const relativePath = join(
+      randomBytes(2).toString('hex'),
+      `${randomBytes(16).toString('hex')}.pdf`
+    )
     const target = this.#absolute(relativePath)
 
     await mkdir(dirname(target), { recursive: true })

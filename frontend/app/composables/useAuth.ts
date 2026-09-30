@@ -4,7 +4,7 @@ import type { FriendlyError } from '~/utils/errors'
 import type { ApiUser, AuthPayload } from '~/types/api'
 
 /**
- * Session state: the bearer token and the signed in user.
+ * Session state: the bearer token and the signed-in user.
  * The token is managed by useToken so it can be persisted and restored.
  */
 export function useAuth() {

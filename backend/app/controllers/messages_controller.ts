@@ -85,9 +85,7 @@ async function prepareTurn(
    * "attachments" is preloaded so the turn the model is about to answer
    * includes the documents attached to earlier messages.
    */
-  await conversation.load('messages', (query) =>
-    query.orderBy('id', 'asc').preload('attachments')
-  )
+  await conversation.load('messages', (query) => query.orderBy('id', 'asc').preload('attachments'))
 
   const history = [...conversation.messages]
 
@@ -109,10 +107,7 @@ async function prepareTurn(
   }
 
   const rawImageBytes = images.reduce((total, image) => total + (image.data.length * 3) / 4, 0)
-  const rawPdfBytes = pdfs.reduce(
-    (total, pdf) => total + Buffer.from(pdf.data, 'base64').length,
-    0
-  )
+  const rawPdfBytes = pdfs.reduce((total, pdf) => total + Buffer.from(pdf.data, 'base64').length, 0)
 
   if (rawImageBytes + rawPdfBytes > MAX_TOTAL_INLINE_BYTES) {
     throw new Exception('The attached files are too large together', {

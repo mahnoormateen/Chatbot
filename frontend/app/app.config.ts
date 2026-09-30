@@ -5,15 +5,15 @@
  * whole app. Per instance overrides still win: a "color" prop, a "class",
  * or a "ui" object passed to a single component beats what is set here.
  */
-export default defineAppConfig({
-  ui: {
-    /** The accent colour and the neutral ramp. Every other colour in the
-     * palette is resolved by the colour mode module from these two plus
-     * the ones Nuxt UI ships with.
-     */
-    colors: {
-      primary: 'orange',
-      neutral: 'zinc',
-    },
-  },
-})
+// export default defineAppConfig({
+//   ui: {
+//     /** The accent colour and the neutral ramp. Every other colour in the
+//      * palette is resolved by the colour mode module from these two plus
+//      * the ones Nuxt UI ships with.
+//      */
+//     colors: {
+//       primary: 'orange',
+//       neutral: 'zinc',
+//     },
+//   },
+// })

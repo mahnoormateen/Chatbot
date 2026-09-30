@@ -5,7 +5,13 @@ import vine from '@vinejs/vine'
  * Gemini API accepts JPEG, PNG, WebP, HEIC and HEIF; everything else is
  * rejected before it reaches the database.
  */
-const IMAGE_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'] as const
+const IMAGE_MIME_TYPES = [
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'image/heic',
+  'image/heif',
+] as const
 
 /**
  * Upper bound for every field that travels as base64. 8M characters is

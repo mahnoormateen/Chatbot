@@ -12,9 +12,14 @@ export default class Message extends MessageSchema {
    * pg driver would otherwise encode a JS array as a Postgres array
    * literal, which is not valid JSON. Reads need no hook: the driver
    * already parses jsonb back into objects.
+   *
+   * Both null and undefined are named rather than a loose equality:
+   * Lucid hands back undefined for a column that was never set, and a
+   * turn with no images must store SQL NULL, not the string "undefined".
    */
   @column({
-    prepare: (value: ImageAttachment[] | null) => (value == null ? null : JSON.stringify(value)),
+    prepare: (value: ImageAttachment[] | null) =>
+      value === null || value === undefined ? null : JSON.stringify(value),
   })
   declare images: ImageAttachment[] | null
 

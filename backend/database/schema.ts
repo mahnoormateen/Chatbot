@@ -8,7 +8,17 @@ import { BaseModel, column } from '@adonisjs/lucid/orm'
 import { DateTime } from 'luxon'
 
 export class AttachmentSchema extends BaseModel {
-  static $columns = ['conversationId', 'createdAt', 'id', 'messageId', 'mimeType', 'name', 'path', 'size', 'updatedAt'] as const
+  static $columns = [
+    'conversationId',
+    'createdAt',
+    'id',
+    'messageId',
+    'mimeType',
+    'name',
+    'path',
+    'size',
+    'updatedAt',
+  ] as const
   $columns = AttachmentSchema.$columns
   @column()
   declare conversationId: number
@@ -31,7 +41,18 @@ export class AttachmentSchema extends BaseModel {
 }
 
 export class AuthAccessTokenSchema extends BaseModel {
-  static $columns = ['abilities', 'createdAt', 'expiresAt', 'hash', 'id', 'lastUsedAt', 'name', 'tokenableId', 'type', 'updatedAt'] as const
+  static $columns = [
+    'abilities',
+    'createdAt',
+    'expiresAt',
+    'hash',
+    'id',
+    'lastUsedAt',
+    'name',
+    'tokenableId',
+    'type',
+    'updatedAt',
+  ] as const
   $columns = AuthAccessTokenSchema.$columns
   @column()
   declare abilities: string
@@ -73,7 +94,15 @@ export class ConversationSchema extends BaseModel {
 }
 
 export class MessageSchema extends BaseModel {
-  static $columns = ['content', 'conversationId', 'createdAt', 'id', 'images', 'role', 'updatedAt'] as const
+  static $columns = [
+    'content',
+    'conversationId',
+    'createdAt',
+    'id',
+    'images',
+    'role',
+    'updatedAt',
+  ] as const
   $columns = MessageSchema.$columns
   @column()
   declare content: string

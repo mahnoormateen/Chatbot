@@ -13,7 +13,7 @@ import type { StagedImage, StagedPdf } from '~/types/composer'
  * with "submit on enter" switched off and this component owns both
  * triggers: its own keydown handler and the send button. A reply already
  * in flight turns the button into a stop, which is the component's own
- * behaviour and is left alone.
+ * behavior and is left alone.
  *
  * Files are read into memory as soon as they are chosen, because that is
  * the only shape the streaming endpoint accepts and because it makes a
