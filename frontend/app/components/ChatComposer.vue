@@ -260,6 +260,7 @@ function onDragLeave() {
             icon="i-lucide-paperclip"
             color="neutral"
             variant="ghost"
+            class="cursor-pointer"
             size="xs"
             aria-label="Attach images or PDFs"
             @click="fileInput?.click()"
@@ -270,6 +271,7 @@ function onDragLeave() {
             :model-value="props.modelValue"
             :loading="props.loadingModels"
             :disabled="props.status !== 'ready'"
+
             @update:model-value="emit('update:modelValue', $event)"
           />
 
@@ -281,6 +283,7 @@ function onDragLeave() {
           :disabled="!canSend"
           size="xs"
           :on-click="props.status === 'ready' ? submit : undefined"
+          class="cursor-pointer"
           @stop="emit('stop')"
         />
       </template>

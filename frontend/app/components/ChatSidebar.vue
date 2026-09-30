@@ -254,7 +254,7 @@ function commitDelete() {
                   color="neutral"
                   variant="ghost"
                   block
-                  class="w-full justify-start pe-9 hover:bg-elevated/60"
+                  class="w-full justify-start pe-9 hover:bg-elevated/60 cursor-pointer"
                   :title="conversation.title"
                   @click="select(conversation.id)"
                 />
@@ -295,7 +295,7 @@ function commitDelete() {
         v-model="renameTitle"
         autofocus
         placeholder="Conversation title"
-        class="w-full"
+        class="w-full cursor-pointer"
       />
     </template>
 

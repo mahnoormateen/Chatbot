@@ -58,7 +58,7 @@ const selectedLabel = computed(
     variant="ghost"
     color="neutral"
     :content="{ align: 'start', side: 'top', sideOffset: 8 }"
-    class="data-[state=open]:bg-elevated font-medium"
-    :ui="{ base: 'data-[state=open]:ring-0 data-[state=open]:bg-transparent' }"
+    class="data-[state=open]:bg-elevated font-medium cursor-pointer"
+    :ui="{ base: 'data-[state=open]:ring-0 data-[state=open]:bg-transparent cursor-pointer' }"
   />
 </template>
