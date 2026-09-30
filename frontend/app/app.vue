@@ -4,7 +4,7 @@
  *
  * UApp owns everything that needs to be mounted exactly once for the
  * whole document: the toast and tooltip providers, the overlays, and
- * the colour mode script that puts the saved palette on <html> before
+ * the color mode script that puts the saved palette on <html> before
  * the first paint. Any component rendered outside of it falls back to
  * its own defaults, so this is not optional.
  */
