@@ -127,6 +127,9 @@ function actionsFor(conversation: ApiConversation) {
     {
       label: 'Rename',
       icon: 'i-lucide-pencil',
+      ui: {
+        item: 'cursor-pointer',
+      },
       onSelect: () => {
         renaming.value = conversation
         renameTitle.value = conversation.title
@@ -136,6 +139,9 @@ function actionsFor(conversation: ApiConversation) {
     {
       label: 'Delete',
       icon: 'i-lucide-trash-2',
+      ui: {
+        item: 'cursor-pointer',
+      },
       color: 'error' as const,
       onSelect: () => {
         deleting.value = conversation
@@ -190,7 +196,7 @@ function commitDelete() {
   >
     <template #header>
       <ChatLogo v-if="!collapsed" class="min-w-0 flex-1" />
-      <UDashboardSidebarCollapse class="mx-auto" />
+      <UDashboardSidebarCollapse class="mx-auto cursor-pointer" />
     </template>
 
     <!--
@@ -204,10 +210,8 @@ function commitDelete() {
         <UButton
           icon="i-lucide-square-pen"
           label="New conversation"
-          color="neutral"
-          variant="soft"
           block
-          class="justify-start bg-primary text-primary-inverted"
+          class="justify-start bg-primary text-white cursor-pointer"
           @click="emit('create')"
         />
 
@@ -258,7 +262,7 @@ function commitDelete() {
                 <UDropdownMenu
                   :items="actionsFor(conversation)"
                   :content="{ align: 'end' }"
-                  class="absolute inset-e-1 top-1/2 -translate-y-1/2 transition-opacity group-hover/row:opacity-100 focus-within:opacity-100"
+                  class="absolute cursor-pointer inset-e-1 top-1/2 -translate-y-1/2 transition-opacity group-hover/row:opacity-100 focus-within:opacity-100"
                 >
                   <UButton
                     icon="i-lucide-ellipsis"
@@ -284,7 +288,7 @@ function commitDelete() {
     v-model:open="renameOpen"
     title="Rename conversation"
     description="Pick a new title for this conversation."
-    :ui="{ footer: 'flex-row-reverse justify-start' }"
+    :ui="{ footer: 'flex-row-reverse justify-start cursor-pointer' }"
   >
     <template #body>
       <UInput
@@ -310,7 +314,7 @@ function commitDelete() {
     v-model:open="deleteOpen"
     title="Delete conversation"
     description="This removes the conversation and everything in it. It cannot be undone."
-    :ui="{ footer: 'flex-row-reverse justify-start' }"
+    :ui="{ footer: 'flex-row-reverse justify-start cursor-pointer' }"
   >
     <template #footer>
       <UButton color="error" label="Delete" @click="commitDelete" />

@@ -291,12 +291,14 @@ function onEditKeydown(event: KeyboardEvent) {
           <UButton
             label="Save and resend"
             size="xs"
+            class="cursor-pointer"
             :disabled="!draft.trim()"
             @click="commitEdit(id)"
           />
           <UButton
             label="Cancel"
             color="neutral"
+            class="cursor-pointer"
             variant="ghost"
             size="xs"
             @click="cancelEdit"
@@ -335,6 +337,7 @@ function onEditKeydown(event: KeyboardEvent) {
         v-if="metadata?.editable && editingId !== id"
         icon="i-lucide-pencil"
         color="neutral"
+        class="cursor-pointer"
         variant="ghost"
         size="xs"
         aria-label="Edit question"
@@ -345,6 +348,7 @@ function onEditKeydown(event: KeyboardEvent) {
         v-if="role === 'assistant'"
         :icon="copied === id ? 'i-lucide-check' : 'i-lucide-copy'"
         color="neutral"
+        class="cursor-pointer"
         variant="ghost"
         size="xs"
         :aria-label="copied === id ? 'Copied' : 'Copy reply'"

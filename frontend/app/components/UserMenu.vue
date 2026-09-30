@@ -25,9 +25,11 @@ const items = computed<DropdownMenuItem[][]>(() => ([
   [{
     label: 'Theme',
     icon: 'i-lucide-palette',
+    class: 'cursor-pointer',
     children: [{
       label: 'Primary',
       slot: 'chip',
+      class: 'cursor-pointer',
       chip: appConfig.ui.colors.primary,
       content: {
         align: 'center',
@@ -37,6 +39,7 @@ const items = computed<DropdownMenuItem[][]>(() => ([
         label: color,
         chip: color,
         slot: 'chip',
+        class: 'cursor-pointer',
         checked: appConfig.ui.colors.primary === color,
         type: 'checkbox',
         onSelect: (e) => {
@@ -47,6 +50,7 @@ const items = computed<DropdownMenuItem[][]>(() => ([
     }, {
       label: 'Neutral',
       slot: 'chip',
+      class: 'cursor-pointer',
       chip: appConfig.ui.colors.neutral === 'neutral' ? 'old-neutral' : appConfig.ui.colors.neutral,
       content: {
         align: 'end',
@@ -56,6 +60,7 @@ const items = computed<DropdownMenuItem[][]>(() => ([
         label: color,
         chip: color === 'neutral' ? 'old-neutral' : color,
         slot: 'chip',
+        class: 'cursor-pointer',
         type: 'checkbox',
         checked: appConfig.ui.colors.neutral === color,
         onSelect: (e) => {
@@ -67,6 +72,7 @@ const items = computed<DropdownMenuItem[][]>(() => ([
   }, {
     label: 'Appearance',
     icon: 'i-lucide-sun-moon',
+    class: 'cursor-pointer',
     children: [{
       label: 'Light',
       icon: 'i-lucide-sun',
@@ -80,6 +86,7 @@ const items = computed<DropdownMenuItem[][]>(() => ([
       label: 'Dark',
       icon: 'i-lucide-moon',
       type: 'checkbox',
+      class: 'cursor-pointer',
       checked: colorMode.value === 'dark',
       onSelect(e: Event) {
         e.preventDefault()
@@ -89,6 +96,7 @@ const items = computed<DropdownMenuItem[][]>(() => ([
   }],
   [{
     label: 'Sign out',
+    class: 'cursor-pointer',
     icon: 'i-lucide-log-out',
     onSelect() {
       logout()
@@ -101,7 +109,7 @@ const items = computed<DropdownMenuItem[][]>(() => ([
   <UDropdownMenu
     :items="items"
     :content="{ align: 'center', collisionPadding: 12 }"
-    :ui="{ content: collapsed ? 'w-48' : 'w-(--reka-dropdown-menu-trigger-width)' }"
+    :ui="{ content: collapsed ? 'w-48' : 'w-(--reka-dropdown-menu-trigger-width) cursor-pointer' }"
   >
     <UButton
       v-bind="{
@@ -117,7 +125,7 @@ const items = computed<DropdownMenuItem[][]>(() => ([
       variant="ghost"
       block
       :square="collapsed"
-      class="data-[state=open]:bg-elevated"
+      class="data-[state=open]:bg-elevated cursor-pointer"
       :ui="{
         trailingIcon: 'text-dimmed'
       }"

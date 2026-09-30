@@ -123,7 +123,7 @@ const title = computed(() => activeConversation.value?.title || '')
             </template>
 
             <template #right>
-              <UColorModeButton />
+              <UColorModeButton class="cursor-pointer" />
             </template>
           </UDashboardNavbar>
         </template>
