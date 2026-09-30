@@ -140,6 +140,24 @@ export function toFriendlyError(
   const model = context.model
 
   /**
+   * A TypeError out of fetch means the request never got an answer: the
+   * server is down, the address is wrong, or something between them
+   * dropped it. The browser says only "Failed to fetch", so the cause is
+   * named here. The streaming endpoint reads the response itself rather
+   * than through the API client, which is why it arrives with no status
+   * to go on.
+   */
+  if (caught instanceof TypeError) {
+    return {
+      title: 'Cannot reach the server',
+      detail:
+        'The API did not respond. Check that the backend is running and that the address in NUXT_PUBLIC_API_BASE is correct.',
+      items: [],
+      retryable: true,
+    }
+  }
+
+  /**
    * No status at all means the failure never reached the API layer, so
    * it is a bug in the client rather than a server refusal. Reporting
    * this as a connection problem would send the reader to the wrong

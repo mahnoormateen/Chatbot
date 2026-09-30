@@ -1,7 +1,13 @@
 <script setup lang="ts">
 /**
- * Sign in / sign up form. Emits "authenticated" once the backend has
- * issued a token so the parent can load the transcript.
+ * Sign in / sign up form.
+ *
+ * Stands alone when there is no session, so it owns its own centring and
+ * needs no layout around it. Register asks for a name and a confirmation
+ * because the backend validates both.
+ *
+ * Emits "authenticated" once the backend has issued a token; the page
+ * reacts to the session becoming valid, so nothing else is wired here.
  */
 const emit = defineEmits<{ authenticated: [] }>()
 
@@ -35,13 +41,15 @@ function toggle() {
 </script>
 
 <template>
-  <div class="auth">
-    <UCard class="card">
+  <div class="grid place-items-center px-6 py-10">
+    <UCard class="w-full max-w-sm">
       <template #header>
-        <div class="flex items-center justify-between">
-          <div>
-            <h1>{{ isRegister ? 'Create an account' : 'Welcome back' }}</h1>
-            <p>
+        <div class="flex items-start justify-between gap-2">
+          <div class="min-w-0">
+            <h1 class="text-lg font-semibold text-highlighted">
+              {{ isRegister ? 'Create an account' : 'Welcome back' }}
+            </h1>
+            <p class="mt-1 text-sm text-muted">
               {{
                 isRegister
                   ? 'Pick a name and a password to start chatting.'
@@ -49,7 +57,8 @@ function toggle() {
               }}
             </p>
           </div>
-          <ThemeToggle />
+
+          <UColorModeButton />
         </div>
       </template>
 
@@ -67,33 +76,35 @@ function toggle() {
             />
           </UFormField>
 
-          <UFormField label="Email" name="email">
+          <UFormField label="Email" name="email" required>
             <UInput
               v-model="email"
               type="email"
-              required
               autocomplete="email"
               placeholder="you@example.com"
               class="w-full"
             />
           </UFormField>
 
-          <UFormField label="Password" name="password">
+          <UFormField label="Password" name="password" required>
             <UInput
               v-model="password"
               type="password"
-              required
               :autocomplete="isRegister ? 'new-password' : 'current-password'"
               placeholder="At least 8 characters"
               class="w-full"
             />
           </UFormField>
 
-          <UFormField v-if="isRegister" label="Confirm password" name="passwordConfirmation">
+          <UFormField
+            v-if="isRegister"
+            label="Confirm password"
+            name="passwordConfirmation"
+            required
+          >
             <UInput
               v-model="passwordConfirmation"
               type="password"
-              required
               autocomplete="new-password"
               placeholder="Repeat your password"
               class="w-full"
@@ -110,49 +121,13 @@ function toggle() {
       </UForm>
 
       <template #footer>
-        <p class="switch">
-          {{ isRegister ? 'Already have an account?' : 'No account yet?' }}
-          <UButton color="primary" variant="link" @click="toggle">
+        <div class="flex items-center justify-center gap-1 text-sm text-muted">
+          <span>{{ isRegister ? 'Already have an account?' : 'No account yet?' }}</span>
+          <UButton color="primary" variant="link" size="sm" @click="toggle">
             {{ isRegister ? 'Sign in' : 'Register' }}
           </UButton>
-        </p>
+        </div>
       </template>
     </UCard>
   </div>
 </template>
-
-<style scoped>
-.auth {
-  min-height: 100vh;
-  display: grid;
-  place-items: center;
-  padding: 24px;
-}
-
-.card {
-  width: 100%;
-  max-width: 400px;
-}
-
-h1 {
-  margin: 0 0 4px;
-  font-size: 22px;
-  font-weight: 650;
-}
-
-header p {
-  margin: 0;
-  color: var(--ui-text-muted);
-  font-size: 14px;
-}
-
-.switch {
-  margin: 0;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  justify-content: center;
-  font-size: 14px;
-  color: var(--ui-text-muted);
-}
-</style>

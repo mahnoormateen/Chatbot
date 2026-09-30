@@ -225,11 +225,17 @@ export function useChat() {
         // A background refresh is not worth interrupting anyone over.
       }
     }, 2000)
-
-    onScopeDispose(() => {
-      if (refreshTimer) clearTimeout(refreshTimer)
-    })
   }
+
+  /**
+   * Registered here rather than next to the timer: loadModels is called
+   * from a watcher, and a watcher callback runs outside the effect scope
+   * that owns it, so onScopeDispose would have nothing to attach to.
+   */
+  onScopeDispose(() => {
+    if (refreshTimer) clearTimeout(refreshTimer)
+    streamAbort?.abort()
+  })
 
   async function loadConversations(): Promise<void> {
     loadingConversations.value = true
@@ -421,10 +427,13 @@ export function useChat() {
       await loadConversations()
     } catch (caught) {
       /**
-       * A stop is a deliberate act, not a failure: the reply that did
-       * arrive is kept as typed, nothing is offered for retry, and the
-       * transcript is reloaded to agree with the server, which stores a
-       * turn atomically and therefore holds nothing for a cancelled one.
+       * A stop is a deliberate act, not a failure, so nothing is offered
+       * for retry and no banner is raised. The transcript is reloaded
+       * instead of being left holding the optimistic rows: the backend
+       * writes a turn atomically and keeps nothing for a cancelled one,
+       * so the server is the only account of what actually happened. The
+       * half written reply goes with it, which is why the question is
+       * still sitting in the transcript for the user to send again.
        */
       if (streamAbort?.signal.aborted) {
         await openConversation(conversationId).catch(() => {})

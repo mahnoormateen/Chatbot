@@ -42,16 +42,21 @@ const selectedLabel = computed(
 </script>
 
 <template>
+  <!--
+    valueKey is required. Without it USelectMenu compares each whole
+    object against the selected string, never matches, and falls back to
+    printing the raw model id instead of the display name.
+  -->
   <USelectMenu
     v-model="model"
     :items="shownItems"
+    value-key="value"
     :loading="loading"
     :disabled="disabled"
     :placeholder="selectedLabel"
     size="sm"
     variant="ghost"
     color="neutral"
-    icon="i-lucide-chevron-down"
     :content="{ align: 'start', side: 'top', sideOffset: 8 }"
     class="data-[state=open]:bg-elevated font-medium"
     :ui="{ base: 'data-[state=open]:ring-0 data-[state=open]:bg-transparent' }"

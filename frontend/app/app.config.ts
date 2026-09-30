@@ -12,7 +12,7 @@ export default defineAppConfig({
      * the ones Nuxt UI ships with.
      */
     colors: {
-      primary: 'blue',
+      primary: 'orange',
       neutral: 'zinc',
     },
   },

@@ -18,7 +18,14 @@ export interface UiTextPart {
 export interface UiFilePart {
   type: 'file'
   mediaType: string
-  /** Data URI for an image, absent for a document the server holds. */
+  /**
+   * Where the bytes are.
+   *
+   * An image is inlined as a data URI because it travelled as base64 to
+   * begin with, so there is nothing to fetch. A document lives on the
+   * server and this is the API path that returns it, which needs the
+   * session token and therefore cannot be handed to a plain link.
+   */
   url?: string
   filename?: string
   /** Byte count, shown next to the document name. */
@@ -72,10 +79,18 @@ function toParts(message: ChatMessage): UiMessagePart[] {
     })
   }
 
+  // An optimistic row carries a placeholder id of 0 for every document,
+  // so it has nothing addressable to point at until the turn is stored.
+  const stored = !('pending' in message)
+
   for (const attachment of message.attachments ?? []) {
     parts.push({
       type: 'file',
       mediaType: attachment.mimeType,
+      url:
+        stored && attachment.id
+          ? `/api/conversations/${message.conversationId}/messages/${message.id}/attachments/${attachment.id}`
+          : undefined,
       filename: attachment.name,
       size: attachment.size,
     })

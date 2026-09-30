@@ -1,6 +1,13 @@
 <script setup lang="ts">
 /**
- * Gemini chat client.
+ * The single composition root of the chat.
+ *
+ * The sidebar, the transcript and the composer all need the same piece
+ * of state, and useChat owns it in plain refs rather than a shared
+ * store. A layout plus a page would therefore be two stores, and
+ * picking a conversation in the sidebar would update a list the
+ * transcript never looks at. So the whole shell is assembled here
+ * instead, and there is exactly one call to useChat in the app.
  *
  * The browser only ever talks to the AdonisJS backend through
  * runtimeConfig.public.apiBase. The Gemini API key stays on the server:
@@ -8,9 +15,9 @@
  */
 import { useAuth } from '~/composables/useAuth'
 import { useChat } from '~/composables/useChat'
+import { toUiMessages } from '~/utils/uiMessages'
 
-/** False until the stored token has been validated, avoids a login flash. */
-const { user, isAuthenticated, logout, refresh } = useAuth()
+const { user, isAuthenticated, refresh } = useAuth()
 
 const {
   conversations,
@@ -22,8 +29,6 @@ const {
   loadingConversations,
   loadingMessages,
   loadingModels,
-  sending,
-  sendPhase,
   status,
   activeModelName,
   error,
@@ -36,166 +41,143 @@ const {
   renameConversation,
   sendMessage,
   retryLastMessage,
+  stop,
   clearError,
   reset,
 } = useChat()
 
-/** False until the stored token has been validated, avoids a login flash. */
+/**
+ * False until the stored token has been validated, so a reload with a
+ * good token does not flash the sign in form on the way past.
+ */
 const ready = ref(false)
 
-async function loadEverything() {
-  await Promise.all([loadConversations(), loadModels()])
-
-  const mostRecent = conversations.value[0]
-  if (mostRecent) await openConversation(mostRecent.id)
-}
-
-async function boot() {
+onMounted(async () => {
   await refresh()
   ready.value = true
-}
-
-onMounted(boot)
-
-/**
- * Loads the conversations and model list whenever a session starts.
- *
- * The auth panel used to signal a successful sign in/up with an
- * "authenticated" event. That wiring was racy: useAuth sets the session
- * state just before the event fires, which schedules the page re-render,
- * and Vue's scheduled render can unmount <AuthPanel> before the promise
- * continuation in its submit() reaches emit(). Vue then skips the emit
- * silently (an unmounted component cannot dispatch), so loadEverything
- * never ran and a freshly signed in user saw an empty conversation list.
- *
- * Watching the session state instead ties the initial load to the state
- * change itself, so it cannot be skipped by component lifetimes. The
- * false -> true edge fires once per real session: restored (boot), login
- * or register.
- */
-watch(isAuthenticated, (signedIn, wasSignedIn) => {
-  if (signedIn && !wasSignedIn) loadEverything()
 })
 
-async function signOut() {
-  await logout()
-  reset()
-}
+/**
+ * Boot and sign in take the same path, so one watcher covers both: fill
+ * the sidebar, load the models, and open the newest conversation so a
+ * wide screen is not sitting empty. Signing out drops the previous
+ * user's transcript instead, so the next person cannot see it.
+ */
+watch(
+  isAuthenticated,
+  async (signedIn, wasSignedIn) => {
+    if (signedIn) {
+      await Promise.all([loadConversations(), loadModels()])
 
-/** The welcome screen is replaced the moment the first message is sent. */
-const hasMessages = computed(() => messages.value.length > 0)
+      const newest = conversations.value[0]
+      if (newest) await openConversation(newest.id)
+    } else if (wasSignedIn) {
+      reset()
+    }
+  },
+  { immediate: true }
+)
 
-/** Starter prompts on the welcome screen simply become a message. */
-function onPrompt(prompt: string) {
-  sendMessage(prompt)
-}
+const uiMessages = computed(() => toUiMessages(messages.value))
+
+/** Monogram for the user's own messages, taken from what the API knows. */
+const initials = computed(() => user.value?.initials || '')
+
+/** Heading in the panel header; blank until a conversation is open. */
+const title = computed(() => activeConversation.value?.title || '')
 </script>
 
 <template>
-  <UDashboardPanel
-    id="chat"
-    class="relative min-h-0"
-    :ui="{ body: 'p-0 sm:p-0 overscroll-none' }"
-  >
-    <template #header>
-      <Navbar>
-        <template #title>
-          <h1 class="text-sm font-medium text-highlighted truncate min-w-0 max-w-3xs">
-            {{ activeConversation?.title ?? 'New conversation' }}
-          </h1>
+  <div v-if="!ready" class="grid min-h-svh place-items-center">
+    <UIcon name="i-lucide-loader-circle" class="size-6 animate-spin text-muted" />
+  </div>
+
+  <AuthPanel v-else-if="!isAuthenticated" class="min-h-svh" />
+
+  <UDashboardGroup v-else>
+    <ChatSidebar
+      :conversations="conversations"
+      :active-id="activeId"
+      :loading="loadingConversations"
+      @select="openConversation"
+      @create="createConversation"
+      @remove="deleteConversation"
+      @rename="renameConversation"
+    />
+
+    <div class="relative flex min-w-0 flex-1 flex-col">
+      <UDashboardPanel
+        id="chat"
+        class="min-h-svh flex-1"
+        :ui="{
+          body: 'flex min-h-0 flex-1 flex-col gap-0 overflow-hidden p-0 sm:p-0',
+        }"
+      >
+        <template #header>
+          <UDashboardNavbar>
+            <template #left>
+              <h1 class="truncate text-sm font-semibold text-highlighted">
+                {{ title || 'New conversation' }}
+              </h1>
+            </template>
+
+            <template #right>
+              <UColorModeButton />
+            </template>
+          </UDashboardNavbar>
         </template>
 
-        <ModelSelect
-          :models="models"
-          :model-value="selectedModel"
-          :loading="loadingModels"
-          :disabled="sending"
-          @update:model-value="selectedModel = $event"
-        />
-      </Navbar>
-    </template>
+        <template #body>
+          <!--
+            The panel body is a column, not a scroller: the transcript
+            has to be the element that scrolls, because UChatMessages
+            attaches its auto-scroll behaviour to whatever scroll parent
+            it finds when it mounts.
+          -->
+          <div class="flex min-h-0 flex-1 flex-col">
+            <USkeleton v-if="loadingMessages" class="mx-2.5 h-24 w-full" />
 
-    <template #body>
-      <UContainer class="flex-1 flex flex-col gap-4 sm:gap-6">
-        <div v-if="loadingMessages" class="flex flex-col gap-4 p-6">
-          <USkeleton class="h-7 w-full rounded-lg" />
-          <USkeleton class="h-7 w-2/3 rounded-lg" />
-          <USkeleton class="h-7 w-1/2 rounded-lg" />
-        </div>
+            <div v-else-if="messages.length" class="min-h-0 flex-1 overflow-y-auto">
+              <ChatTranscript
+                :messages="uiMessages"
+                :status="status"
+                :model-name="activeModelName"
+                :user-initials="initials"
+                :spacing-offset="200"
+              />
+            </div>
 
-        <div v-else-if="!hasMessages">
-          <p class="text-sm text-muted opacity-60">
-            Start a conversation by sending a message below.
-          </p>
-        </div>
+            <ChatWelcome v-else @prompt="sendMessage" />
 
-        <UChatMessages
-          v-else
-          :messages="messages"
-          :status="status"
-          :model-name="activeModelName"
-          :user-initials="user?.initials"
-        >
-          <template #content="{ message }">
-            <template v-for="(part, index) in message.parts" :key="`${message.id}-${part.type}-${index}`">
-              <template v-if="part.type === 'text'">
-                <p
-                  v-if="message.role === 'assistant'"
-                  class="prose max-w-none break-normal"
-                >
-                  {{ part.text }}
-                </p>
-                <p
-                  v-if="message.role === 'user'"
-                  class="whitespace-pre-wrap text-right text-secondary"
-                >
-                  {{ part.text }}
-                </p>
-              </template>
+            <footer class="shrink-0 mx-auto">
+              <ErrorBanner
+                v-if="error"
+                :error="error"
+                :retryable="error.retryable && canRetry"
+                class="mb-2"
+                @dismiss="clearError"
+                @retry="retryLastMessage"
+              />
+<div class="w-4xl">
 
-              <template v-else-if="part.type === 'file'">
-                <UFilePreview
-                  :name="part.filename ?? 'document'"
-                  :type="part.mediaType"
-                  :preview-url="part.url"
-                  :size="part.size"
-                  removable
-                />
-              </template>
+              <ChatComposer
+                v-model="selectedModel"
+                :status="status"
+                :models="models"
+                :loading-models="loadingModels"
+                :model="activeModelName"
+                @send="sendMessage"
+                @stop="stop"
+              />
+</div>
 
-              <template v-else-if="part.type === 'reasoning'">
-                <p class="text-xs text-muted opacity-50">{{ part.text }}</p>
-              </template>
-            </template>
-          </template>
-        </UChatMessages>
-
-        <footer class="sticky bottom-0 z-10 px-4 pb-4 sm:px-6 sm:pb-6">
-          <ErrorBanner
-            v-if="error"
-            :error="error"
-            :retryable="error.retryable && canRetry"
-            class="mb-3"
-            @dismiss="clearError"
-            @retry="retryLastMessage"
-          />
-
-          <UChatPrompt
-            v-model="selectedModel"
-            :sending="sending"
-            :status="status"
-            :phase="sendPhase"
-            :model="activeModelName"
-            :models="models"
-            :loading-models="loadingModels"
-            @send="sendMessage"
-          />
-        </footer>
-      </UContainer>
-    </template>
-  </UDashboardPanel>
+              <p class="mt-1 px-2.5 pb-2 text-center text-xs text-dimmed">
+                Models can be wrong. Verify anything that matters.
+              </p>
+            </footer>
+          </div>
+        </template>
+      </UDashboardPanel>
+    </div>
+  </UDashboardGroup>
 </template>
-
-<style scoped>
-/* Panel body handles its own padding; the container inside provides it. */
-</style>
