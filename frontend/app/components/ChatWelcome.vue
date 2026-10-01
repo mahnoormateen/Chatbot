@@ -47,7 +47,7 @@ const starters = [
         :key="starter.title"
         variant="soft"
         color="neutral"
-        class="h-auto items-start justify-start gap-1 p-4 text-left"
+        class="h-auto items-start justify-start gap-1 p-4 text-left bg-primary/5 hover:bg-primary/10 dark:hover:bg-primary/20"
         @click="emit('prompt', starter.prompt)"
       >
         <UIcon :name="starter.icon" class="mt-0.5 size-4 shrink-0" />
