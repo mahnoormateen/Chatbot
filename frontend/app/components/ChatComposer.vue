@@ -322,9 +322,6 @@ function onDragLeave() {
       :submit-on-enter="false"
       :autofocus="false"
       placeholder="Ask Gemini anything, or drop a file"
-      :ui="{
-        root: 'rounded-2xl shadow-sm ring-default/80 transition-shadow duration-200 focus-within:shadow-lg focus-within:ring-2 focus-within:ring-primary/40',
-      }"
       @keydown="onKeydown"
     >
       <template #header>
