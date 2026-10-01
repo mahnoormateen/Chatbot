@@ -23,6 +23,15 @@ const props = defineProps<{
   conversations: ApiConversation[]
   activeId: number | null
   loading: boolean
+  /**
+   * Whether the mobile slideover is showing.
+   *
+   * Owned by the page rather than here because the button that opens it
+   * lives in the panel header, which is a sibling of this component. Below
+   * the "lg" breakpoint the sidebar is hidden off-canvas and this flag is
+   * the only thing that brings it back.
+   */
+  open?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -30,10 +39,24 @@ const emit = defineEmits<{
   create: []
   remove: [id: number]
   rename: [id: number, title: string]
+  'update:open': [value: boolean]
 }>()
 
-/** Whether the slideover copy is showing, so a pick can close it. */
-const mobileOpen = ref(false)
+/**
+ * Whether the mobile slideover is showing.
+ *
+ * Owned by the page rather than here because the button that opens it
+ * lives in the panel header, which is a sibling of this component. Below
+ * the "lg" breakpoint the sidebar is hidden off-canvas and this flag is
+ * the only thing that brings it back.
+ *
+ * Written through a computed so the sidebar's "v-model:open" keeps
+ * working while the state itself lives one level up.
+ */
+const sidebarOpen = computed({
+  get: () => props.open ?? false,
+  set: (value) => emit('update:open', value),
+})
 
 /**
  * Whether the desktop rail is collapsed to the narrow strip.
@@ -60,7 +83,7 @@ const filtered = computed(() => {
  * a menu at all, and an open model nobody reads changes nothing.
  */
 function select(id: number) {
-  mobileOpen.value = false
+  emit('update:open', false)
   emit('select', id)
 }
 
@@ -182,7 +205,7 @@ function commitDelete() {
 <template>
   <UDashboardSidebar
     id="default"
-    v-model:open="mobileOpen"
+    v-model:open="sidebarOpen"
     v-model:collapsed="collapsed"
     resizable
     collapsible

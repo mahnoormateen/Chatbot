@@ -216,7 +216,7 @@ function onDragLeave() {
 
 <template>
   <div
-    class="relative w-full"
+    class="relative"
     @dragenter.prevent="onDragEnter"
     @dragover.prevent
     @dragleave.prevent="onDragLeave"
@@ -283,7 +283,7 @@ function onDragLeave() {
           :disabled="!canSend"
           size="xs"
           :on-click="props.status === 'ready' ? submit : undefined"
-          class="cursor-pointer"
+          class="cursor-pointer text-white"
           @stop="emit('stop')"
         />
       </template>

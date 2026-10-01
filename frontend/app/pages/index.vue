@@ -13,11 +13,11 @@
  * runtimeConfig.public.apiBase. The Gemini API key stays on the server:
  * this app has no knowledge of it and never sends one.
  */
-import { useAuth } from '~/composables/useAuth'
-import { useChat } from '~/composables/useChat'
-import { toUiMessages } from '~/utils/uiMessages'
+import {useAuth} from '~/composables/useAuth'
+import {useChat} from '~/composables/useChat'
+import {toUiMessages} from '~/utils/uiMessages'
 
-const { user, isAuthenticated, refresh } = useAuth()
+const {user, isAuthenticated, refresh} = useAuth()
 
 const {
   conversations,
@@ -65,18 +65,18 @@ onMounted(async () => {
  * user's transcript instead, so the next person cannot see it.
  */
 watch(
-  isAuthenticated,
-  async (signedIn, wasSignedIn) => {
-    if (signedIn) {
-      await Promise.all([loadConversations(), loadModels()])
+    isAuthenticated,
+    async (signedIn, wasSignedIn) => {
+      if (signedIn) {
+        await Promise.all([loadConversations(), loadModels()])
 
-      const newest = conversations.value[0]
-      if (newest) await openConversation(newest.id)
-    } else if (wasSignedIn) {
-      reset()
-    }
-  },
-  { immediate: true }
+        const newest = conversations.value[0]
+        if (newest) await openConversation(newest.id)
+      } else if (wasSignedIn) {
+        reset()
+      }
+    },
+    {immediate: true}
 )
 
 const uiMessages = computed(() => toUiMessages(messages.value))
@@ -86,44 +86,63 @@ const initials = computed(() => user.value?.initials || '')
 
 /** Heading in the panel header; blank until a conversation is open. */
 const title = computed(() => activeConversation.value?.title || '')
+
+/**
+ * Whether the conversation list is open on mobile.
+ *
+ * Only meaningful below the "lg" breakpoint, where the sidebar is an
+ * off-canvas slideover. On a wide screen the sidebar is always visible
+ * and this flag is ignored.
+ */
+const sidebarOpen = ref(false)
 </script>
 
 <template>
   <div v-if="!ready" class="grid min-h-svh place-items-center">
-    <UIcon name="i-lucide-loader-circle" class="size-6 animate-spin text-muted" />
+    <UIcon name="i-lucide-loader-circle" class="size-6 animate-spin text-muted"/>
   </div>
 
-  <AuthPanel v-else-if="!isAuthenticated" class="min-h-svh" />
+  <AuthPanel v-else-if="!isAuthenticated" class="min-h-svh"/>
 
   <UDashboardGroup v-else>
     <ChatSidebar
-      :conversations="conversations"
-      :active-id="activeId"
-      :loading="loadingConversations"
-      @select="openConversation"
-      @create="createConversation"
-      @remove="deleteConversation"
-      @rename="renameConversation"
+        :conversations="conversations"
+        :active-id="activeId"
+        :loading="loadingConversations"
+        v-model:open="sidebarOpen"
+        @select="openConversation"
+        @create="createConversation"
+        @remove="deleteConversation"
+        @rename="renameConversation"
     />
 
     <div class="relative flex min-w-0 flex-1 flex-col">
       <UDashboardPanel
-        id="chat"
-        class="min-h-svh flex-1"
-        :ui="{
+          id="chat"
+          class="min-h-svh flex-1"
+          :ui="{
           body: 'flex min-h-0 flex-1 flex-col gap-0 overflow-hidden p-0 sm:p-0',
         }"
       >
         <template #header>
           <UDashboardNavbar>
             <template #left>
+              <UButton
+                icon="i-lucide-menu"
+                color="neutral"
+                variant="ghost"
+                size="sm"
+                class="lg:hidden cursor-pointer"
+                aria-label="Open conversations"
+                @click="sidebarOpen = true"
+              />
               <h1 class="truncate text-sm font-semibold text-highlighted">
                 {{ title || 'New conversation' }}
               </h1>
             </template>
 
             <template #right>
-              <UColorModeButton class="cursor-pointer" />
+              <UColorModeButton class="cursor-pointer"/>
             </template>
           </UDashboardNavbar>
         </template>
@@ -136,42 +155,42 @@ const title = computed(() => activeConversation.value?.title || '')
             it finds when it mounts.
           -->
           <div class="flex min-h-0 flex-1 flex-col">
-            <USkeleton v-if="loadingMessages" class="mx-2.5 h-24 w-full" />
+            <USkeleton v-if="loadingMessages" class="mx-2.5 h-24 w-full"/>
 
             <div v-else-if="messages.length" class="min-h-0 flex-1 overflow-y-auto">
               <ChatTranscript
-                :messages="uiMessages"
-                :status="status"
-                :model-name="activeModelName"
-                :user-initials="initials"
-                :spacing-offset="200"
-                @edit="editMessage"
+                  :messages="uiMessages"
+                  :status="status"
+                  :model-name="activeModelName"
+                  :user-initials="initials"
+                  :spacing-offset="200"
+                  @edit="editMessage"
               />
             </div>
 
-            <ChatWelcome v-else @prompt="sendMessage" />
+            <ChatWelcome v-else @prompt="sendMessage"/>
 
             <footer class="shrink-0 mx-auto">
               <ErrorBanner
-                v-if="error"
-                :error="error"
-                :retryable="error.retryable && canRetry"
-                class="mb-2"
-                @dismiss="clearError"
-                @retry="retryLastMessage"
+                  v-if="error"
+                  :error="error"
+                  :retryable="error.retryable && canRetry"
+                  class="mb-2"
+                  @dismiss="clearError"
+                  @retry="retryLastMessage"
               />
-<div class="w-4xl">
+              <div class="w-4xl">
 
-              <ChatComposer
-                v-model="selectedModel"
-                :status="status"
-                :models="models"
-                :loading-models="loadingModels"
-                :model="activeModelName"
-                @send="sendMessage"
-                @stop="stop"
-              />
-</div>
+                <ChatComposer
+                    v-model="selectedModel"
+                    :status="status"
+                    :models="models"
+                    :loading-models="loadingModels"
+                    :model="activeModelName"
+                    @send="sendMessage"
+                    @stop="stop"
+                />
+              </div>
 
               <p class="mt-1 px-2.5 pb-2 text-center text-xs text-dimmed">
                 Models can be wrong. Verify anything that matters.
