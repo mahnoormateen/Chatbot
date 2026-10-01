@@ -46,6 +46,12 @@ const selectedLabel = computed(
     valueKey is required. Without it USelectMenu compares each whole
     object against the selected string, never matches, and falls back to
     printing the raw model id instead of the display name.
+
+    The width cap is here because of the footer, not the picker. Model ids
+    run long ("gemini-2.5-flash-preview-09-2025") and the trigger sizes to
+    its own text, so on a narrow screen an uncapped picker would push the
+    attach and microphone buttons off the edge. Capping it lets the label
+    truncate with the rest of that row.
   -->
   <USelectMenu
     v-model="model"
@@ -58,7 +64,9 @@ const selectedLabel = computed(
     variant="ghost"
     color="neutral"
     :content="{ align: 'start', side: 'top', sideOffset: 8 }"
-    class="data-[state=open]:bg-elevated font-medium cursor-pointer"
-    :ui="{ base: 'data-[state=open]:ring-0 data-[state=open]:bg-transparent cursor-pointer' }"
+    class="data-[state=open]:bg-elevated max-w-36 font-medium cursor-pointer sm:max-w-52"
+    :ui="{
+      base: 'data-[state=open]:ring-0 data-[state=open]:bg-transparent cursor-pointer min-w-0',
+    }"
   />
 </template>

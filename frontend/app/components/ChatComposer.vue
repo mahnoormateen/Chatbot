@@ -18,6 +18,11 @@ import type { StagedImage, StagedPdf } from '~/types/composer'
  * Files are read into memory as soon as they are chosen, because that is
  * the only shape the streaming endpoint accepts and because it makes a
  * drop, a paste and a file picker identical from here on.
+ *
+ * The microphone is a third way in, and it lands in the same text field.
+ * Recognition runs in the browser, so there is nothing to configure and no
+ * endpoint to call: the settled phrases are appended to whatever was already
+ * typed and the turn is sent exactly as it would have been by hand.
  */
 const props = defineProps<{
   status: ChatStatus
@@ -50,6 +55,57 @@ let dragDepth = 0
 const fileInput = ref<HTMLInputElement | null>(null)
 const toast = useToast()
 
+/**
+ * Appends dictated words to the text field rather than replacing it.
+ *
+ * Dictation sits alongside typing, not instead of it, so a phrase the
+ * engine settles is joined onto whatever is already there. A space is
+ * needed between them: the recognizer punctuates its own output but never
+ * leads with whitespace, and without the join two words would fuse into
+ * one. The trailing edge of the field is trimmed so dictating after a
+ * newline does not double the gap.
+ */
+function dictate(transcript: string) {
+  const existing = text.value.replace(/\s+$/, '')
+  text.value = existing ? `${existing} ${transcript}` : transcript
+}
+
+/**
+ * Destructured rather than held as one object, matching how useChat is
+ * taken apart elsewhere. A plain object of refs does not unwrap in a
+ * template -- only top level bindings do -- so "speech.supported" in markup
+ * would arrive as a ref object, which is always truthy and would offer the
+ * microphone in a browser that cannot use it.
+ */
+const {
+  supported: dictationAvailable,
+  listening: dictating,
+  interim: dictatedNow,
+  failure: dictationFailure,
+  stop: stopDictation,
+  toggle: toggleDictation,
+} = useSpeechRecognition({ onFinal: dictate })
+
+/**
+ * A refusal the engine reported while listening.
+ *
+ * Only the newest one is shown and it is raised as a toast rather than put
+ * in the field, because a microphone that is blocked or has gone quiet says
+ * nothing about the question being composed. Watched rather than read at
+ * the call site so the failure lands the moment it happens, which for a
+ * blocked permission is the only moment it is actionable.
+ */
+watch(dictationFailure, (problem) => {
+  if (!problem) return
+
+  toast.add({
+    title: problem.title,
+    description: problem.detail,
+    icon: 'i-lucide-mic-off',
+    color: 'error',
+  })
+})
+
 /** Total bytes staged, against the per turn cap. */
 const stagedBytes = computed(
   () =>
@@ -64,8 +120,23 @@ const canSend = computed(
     stagedBytes.value <= MAX_TURN_BYTES
 )
 
-/** One word for the state line beside the model picker. */
+/**
+ * The status line beside the model picker.
+ *
+ * Whatever is most worth saying right now: what the engine is hearing while
+ * dictation is open, otherwise how the turn in flight is going, otherwise
+ * nothing at all.
+ */
 const hint = computed(() => {
+  /**
+   * Dictation takes the line for itself and shows the words being heard
+   * rather than a label, so the user can tell a quiet microphone from a
+   * silent one. The two cannot collide: the microphone is disabled for the
+   * duration of a turn, so nobody is choosing what to type and waiting on a
+   * reply at once. Settled words leave this line and appear in the field,
+   * which is why only the guess is shown here.
+   */
+  if (dictating.value) return dictatedNow.value || 'Listening...'
   if (props.status === 'submitted') return `${props.model || 'Gemini'} is thinking...`
   if (props.status === 'streaming') return 'Writing reply...'
   return ''
@@ -164,6 +235,13 @@ function submit() {
     images: images.value.map((image) => ({ mimeType: image.mimeType, data: image.data })),
     pdfs: pdfs.value.map((pdf) => ({ name: pdf.name, data: pdf.data })),
   }
+
+  /**
+   * The microphone is switched off before the field is cleared, not after.
+   * A phrase the engine settles moments later would otherwise land in the
+   * empty field left behind here and greet the next turn.
+   */
+  stopDictation()
 
   // Cleared before the emit so a rejected send does not leave the text
   // sitting there with nothing to explain it.
@@ -264,6 +342,24 @@ function onDragLeave() {
             size="xs"
             aria-label="Attach images or PDFs"
             @click="fileInput?.click()"
+          />
+
+          <!--
+            Shown only where recognition actually exists. Firefox has never
+            implemented the Web Speech API, and a microphone button that
+            cannot work is worse than no button at all.
+          -->
+          <UButton
+            v-if="dictationAvailable"
+            :icon="dictating ? 'i-lucide-square' : 'i-lucide-mic'"
+            :color="dictating ? 'error' : 'neutral'"
+            :variant="dictating ? 'soft' : 'ghost'"
+            :class="['cursor-pointer', dictating && 'animate-pulse']"
+            size="xs"
+            :disabled="props.status !== 'ready'"
+            :aria-label="dictating ? 'Stop dictating' : 'Dictate your message'"
+            :aria-pressed="dictating"
+            @click="toggleDictation"
           />
 
           <ModelSelect

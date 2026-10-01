@@ -15,5 +15,24 @@ export default defineAppConfig({
       primary: 'orange',
       neutral: 'zinc',
     },
+
+    /**
+     * A hand pointing at anything that does something.
+     *
+     * The button theme only styles the disabled state, so an enabled
+     * button keeps the arrow cursor and the page stops looking clickable.
+     * Added to the base slot rather than to a single button because this is
+     * the one affordance every button shares.
+     *
+     * It merges with the theme's own base slot rather than replacing it, so
+     * "disabled:cursor-not-allowed" survives: that selector carries the
+     * :disabled pseudo class and so still wins for a button that cannot be
+     * pressed.
+     */
+    button: {
+      slots: {
+        base: 'cursor-pointer',
+      },
+    },
   },
 })
