@@ -11,9 +11,15 @@ defineProps<{
 </script>
 
 <template>
-  <div class="flex items-center gap-2">
+  <div class="flex items-center gap-2.5">
+    <!--
+      A gradient, a ring and a shadow rather than a flat square of the
+      accent. The mark is the one piece of branding on the signed out
+      screen, where it has no surrounding chrome to sit in, so it carries
+      more of the visual weight on its own.
+    -->
     <span
-      class="grid size-8 shrink-0 place-items-center rounded-lg bg-primary text-primary-inverted"
+      class="grid size-9 shrink-0 place-items-center rounded-xl bg-linear-to-br from-primary from-40% to-primary/70 text-primary-inverted shadow-sm ring-1 ring-primary/20"
     >
       <UIcon name="i-lucide-bot" class="size-5 text-white" />
     </span>

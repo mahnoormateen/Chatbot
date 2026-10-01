@@ -41,8 +41,12 @@ function toggle() {
 </script>
 
 <template>
-  <div class="grid place-items-center px-6 py-10">
-    <UCard class="w-full max-w-sm">
+  <!--
+    The glow is on the wrapper rather than the card so it reads as light
+    falling on the page, not as part of the card's own surface.
+  -->
+  <div class="app-canvas grid min-h-svh place-items-center px-6 py-10">
+    <UCard class="w-full max-w-sm shadow-xl ring-1 ring-default/70 backdrop-blur-sm">
       <template #header>
         <div class="flex items-start justify-between gap-2">
           <div class="min-w-0">
@@ -114,6 +118,7 @@ function toggle() {
           <UButton
             type="submit"
             block
+            class="cursor-pointer shadow-sm"
             :loading="loading"
             :label="isRegister ? 'Create account' : 'Sign in'"
           />

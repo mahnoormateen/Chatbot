@@ -33,8 +33,15 @@ const starters = [
   <div class="mx-auto flex w-full max-w-3xl flex-1 flex-col justify-center px-6 py-12">
     <ChatLogo class="mb-6" />
 
+    <!--
+      The gradient is clipped to the text, so the type itself carries the
+      accent and the page below it stays neutral. "bg-clip-text" is what
+      moves the paint from the box to the glyphs.
+    -->
     <h2 class="text-2xl font-semibold text-highlighted sm:text-3xl">
-      What can I help you with?
+      <span class="bg-linear-to-r from-primary from-40% to-primary/60 bg-clip-text text-transparent">
+        What can I help you with?
+      </span>
     </h2>
     <p class="mt-2 max-w-prose text-muted">
       Ask a question, attach up to three images and three PDFs, and the answer
@@ -42,15 +49,25 @@ const starters = [
     </p>
 
     <div class="mt-8 grid gap-3 sm:grid-cols-3">
+      <!--
+        Each card is its own surface with a tint that deepens on hover, so
+        the three read as a row of options rather than as three pieces of
+        loose body text. The lift is two pixels: enough to feel clickable,
+        small enough that a row of three does not look like it is floating
+        away.
+      -->
       <UButton
         v-for="starter in starters"
         :key="starter.title"
-        variant="soft"
+        variant="outline"
         color="neutral"
-        class="h-auto items-start justify-start gap-1 p-4 text-left bg-primary/5 hover:bg-primary/10 dark:hover:bg-primary/20"
+        class="group h-auto items-start justify-start gap-3 bg-default/60 p-4 text-left ring-1 ring-default transition duration-200 hover:-translate-y-0.5 hover:bg-primary/5 hover:shadow-md hover:ring-primary/30"
         @click="emit('prompt', starter.prompt)"
       >
-        <UIcon :name="starter.icon" class="mt-0.5 size-4 shrink-0" />
+        <!-- The icon tile keeps the glyph from crowding the title. -->
+        <span class="grid size-8 shrink-0 place-items-center rounded-lg bg-primary/10 text-primary transition-colors duration-200 group-hover:bg-primary/15">
+          <UIcon :name="starter.icon" class="size-4" />
+        </span>
         <span class="min-w-0">
           <span class="block text-sm font-medium text-highlighted">
             {{ starter.title }}

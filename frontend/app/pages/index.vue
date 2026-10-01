@@ -121,11 +121,17 @@ const sidebarOpen = ref(false)
           id="chat"
           class="min-h-svh flex-1"
           :ui="{
-          body: 'flex min-h-0 flex-1 flex-col gap-0 overflow-hidden p-0 sm:p-0',
+          body: 'app-canvas flex min-h-0 flex-1 flex-col gap-0 overflow-hidden p-0 sm:p-0',
         }"
       >
         <template #header>
-          <UDashboardNavbar>
+          <!--
+            Glass rather than a solid bar. The transcript scrolls right up
+            under this, and an opaque strip would cut the conversation in
+            half; the veil keeps the title readable while letting the
+            bubbles show faintly through it.
+          -->
+          <UDashboardNavbar class="app-glass">
             <template #left>
               <UButton
                 icon="i-lucide-menu"
@@ -155,9 +161,29 @@ const sidebarOpen = ref(false)
             it finds when it mounts.
           -->
           <div class="flex min-h-0 flex-1 flex-col">
-            <USkeleton v-if="loadingMessages" class="mx-2.5 h-24 w-full"/>
+            <!--
+              The skeleton sits in the same capped column as the
+              transcript, so the page does not visibly change width the
+              moment the conversation arrives.
+            -->
+            <div
+              v-if="loadingMessages"
+              class="mx-auto w-full max-w-3xl flex-1 space-y-4 px-4 py-6 sm:px-6"
+            >
+              <USkeleton v-for="turn in 2" :key="turn" class="h-24 w-full" />
+            </div>
 
-            <div v-else-if="messages.length" class="min-h-0 flex-1 overflow-y-auto">
+            <!--
+              The transcript and the composer share one width cap so the
+              column of conversation stays put. Without it a long answer on
+              a wide screen stretched edge to edge while the input sat at a
+              fixed size below, and the two stopped agreeing on where the
+              conversation begins.
+            -->
+            <div
+                v-else-if="messages.length"
+                class="mx-auto min-h-0 w-full max-w-3xl flex-1 overflow-y-auto"
+            >
               <ChatTranscript
                   :messages="uiMessages"
                   :status="status"
@@ -170,7 +196,7 @@ const sidebarOpen = ref(false)
 
             <ChatWelcome v-else @prompt="sendMessage"/>
 
-            <footer class="shrink-0 mx-auto">
+            <footer class="shrink-0 mx-auto w-full max-w-3xl">
               <ErrorBanner
                   v-if="error"
                   :error="error"
@@ -179,8 +205,8 @@ const sidebarOpen = ref(false)
                   @dismiss="clearError"
                   @retry="retryLastMessage"
               />
-              <div class="w-4xl">
 
+              <div class="px-4 sm:px-6">
                 <ChatComposer
                     v-model="selectedModel"
                     :status="status"
@@ -192,7 +218,7 @@ const sidebarOpen = ref(false)
                 />
               </div>
 
-              <p class="mt-1 px-2.5 pb-2 text-center text-xs text-dimmed">
+              <p class="mt-2 px-2.5 pb-2 text-center text-xs text-dimmed">
                 Models can be wrong. Verify anything that matters.
               </p>
             </footer>

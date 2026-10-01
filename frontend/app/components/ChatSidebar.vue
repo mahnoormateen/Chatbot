@@ -230,11 +230,16 @@ function commitDelete() {
     -->
     <template #default>
       <template v-if="!collapsed">
+        <!--
+          The one saturated element in the rail. A gradient and a shadow
+          give it the same weight as the app mark at the top, so the two
+          ends of the sidebar are visibly the same kind of thing.
+        -->
         <UButton
           icon="i-lucide-square-pen"
           label="New conversation"
           block
-          class="justify-start bg-primary text-white cursor-pointer"
+          class="justify-start cursor-pointer bg-linear-to-r from-primary from-40% to-primary/80 text-white shadow-sm ring-1 ring-primary/20 transition hover:shadow-md"
           @click="emit('create')"
         />
 
@@ -244,7 +249,7 @@ function commitDelete() {
           placeholder="Search"
           size="sm"
           autocomplete="off"
-          :ui="{ base: 'bg-elevated/50' }"
+          :ui="{ base: 'bg-elevated/50 ring-1 ring-default' }"
         />
 
         <USkeleton v-if="props.loading" class="h-9 w-full" />
@@ -270,6 +275,17 @@ function commitDelete() {
                 :key="conversation.id"
                 class="group/row relative"
               >
+                <!--
+                  A marker in the gutter marks the open conversation, so
+                  which thread is being read survives a long list and does
+                  not depend on spotting a tinted row.
+                -->
+                <span
+                  v-if="conversation.id === props.activeId"
+                  class="pointer-events-none absolute inset-y-1.5 start-0 w-0.5 rounded-full bg-primary"
+                  aria-hidden="true"
+                />
+
                 <UButton
                   :label="conversation.title"
                   :active="conversation.id === props.activeId"
@@ -277,7 +293,7 @@ function commitDelete() {
                   color="neutral"
                   variant="ghost"
                   block
-                  class="w-full justify-start pe-9 hover:bg-elevated/60 cursor-pointer"
+                  class="w-full cursor-pointer justify-start ps-3 pe-9 transition-colors hover:bg-elevated/60"
                   :title="conversation.title"
                   @click="select(conversation.id)"
                 />

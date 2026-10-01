@@ -82,6 +82,134 @@ body,
   .caret {
     animation: none;
   }
+
+  /* Everything else in the shell animates on hover, on focus or on state
+     change. Honouring the preference here rather than per component means a
+     new transition is covered the day it is written, instead of the day
+     someone remembers. Scroll behaviour is left alone: it is not motion the
+     user did not ask for, and removing it strands keyboard users at the top
+     of a long transcript. */
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ------------------------------------------------------------------
+   The canvas the app sits on.
+
+   A flat page colour reads as unfinished next to the cards floating on
+   it. Two very soft washes of the theme's own accent give the eye
+   somewhere for the surface to sit above, and because they are built from
+   --ui-primary they follow the palette and the colour mode for free.
+
+   "fixed" is what makes this work as a canvas: without it the wash is
+   painted in the element's own box and scrolls away with the content,
+   which looks like a mistake as soon as the transcript grows.
+   ------------------------------------------------------------------ */
+.app-canvas {
+  background-color: var(--ui-bg);
+  background-repeat: no-repeat;
+  background-attachment: fixed;
+}
+
+/*
+   The wash is gated rather than written straight into .app-canvas on
+   purpose. Tinting the accent down to 13% needs color-mix, and the build
+   step rewrites a color-mix it cannot evaluate (the colour is a CSS
+   variable) into the first argument alone. Left ungated that becomes a
+   full-strength accent gradient painted behind the whole app, which is a
+   far worse outcome than having no glow at all. Behind a color-mix probe the
+   oldest path just gets the flat background, which is what the app looked
+   like before any of this.
+*/
+@supports (color: color-mix(in oklab, red, blue)) {
+  .app-canvas {
+    background-image:
+      radial-gradient(
+        38rem 26rem at 12% -8%,
+        color-mix(in oklab, var(--ui-primary) 13%, transparent),
+        transparent 70%
+      ),
+      radial-gradient(
+        34rem 24rem at 92% 4%,
+        color-mix(in oklab, var(--ui-primary) 8%, transparent),
+        transparent 70%
+      );
+  }
+
+  /* Stronger in dark mode, where a wash has far less contrast to work with
+     against an already dark surface. */
+  .dark .app-canvas {
+    background-image:
+      radial-gradient(
+        38rem 26rem at 12% -8%,
+        color-mix(in oklab, var(--ui-primary) 20%, transparent),
+        transparent 70%
+      ),
+      radial-gradient(
+        34rem 24rem at 92% 4%,
+        color-mix(in oklab, var(--ui-primary) 12%, transparent),
+        transparent 70%
+      );
+  }
+}
+
+/* A tinted veil for bars that sit over scrolling content. Kept as a class
+   because it has to combine backdrop-filter, translucency and a fallback
+   colour, and that combination is longer than the utility it replaces. */
+.app-glass {
+  background-color: color-mix(in oklab, var(--ui-bg) 72%, transparent);
+  backdrop-filter: blur(12px) saturate(150%);
+}
+
+/* Where backdrop-filter is unavailable the translucent colour alone would
+   let the transcript show through the navbar, so the veil is made opaque
+   instead. */
+@supports not (backdrop-filter: blur(1px)) {
+  .app-glass {
+    background-color: var(--ui-bg);
+  }
+}
+
+/* ------------------------------------------------------------------
+   Scrollbars.
+
+   The transcript is the page's scrolling region, and the default bar is
+   wide enough on a phone to eat the padding beside the bubbles. Firefox
+   honours scrollbar-width directly; WebKit needs its own pseudo elements,
+   and the track is left transparent so it does not paint a second surface
+   over the canvas.
+   ------------------------------------------------------------------ */
+@layer base {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--ui-border-accented) transparent;
+  }
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  border: 3px solid transparent;
+  border-radius: 9999px;
+  background-color: var(--ui-border-accented);
+  background-clip: content-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: var(--ui-border-strong);
 }
 
 /* ------------------------------------------------------------------

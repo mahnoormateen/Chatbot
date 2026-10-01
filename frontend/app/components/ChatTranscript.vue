@@ -218,30 +218,65 @@ function onEditKeydown(event: KeyboardEvent) {
 
 <template>
   <!--
+    Two deliberate departures from the component defaults, both about
+    telling the two sides apart at a glance.
+
+    The user is "solid" and the assistant is "soft". Both were the same
+    weight of surface before, so a reply and the question that prompted it
+    read as one undifferentiated run of grey boxes. The user bubble also
+    carries the accent, which is what makes a long transcript skimmable.
+
     The white goes on the icon slot, not the avatar root. The theme gives
     the icon its own text colour (text-muted from the neutral variant),
     and an element's own colour beats one inherited from its parent, so
     a class on the root never reaches the glyph.
+
+    "rounded-2xl" on the content slot softens the stock rounded-lg, which
+    is noticeably tight once a bubble is large enough to hold a paragraph.
   -->
   <UChatMessages
     :messages="props.messages"
     :status="props.status"
     :should-auto-scroll="true"
     :spacing-offset="props.spacingOffset ?? 0"
+    :user="{
+      variant: 'solid',
+      color: 'primary',
+      avatar: {
+        text: props.userInitials || 'You',
+        alt: 'You',
+        class: 'ring-2 ring-default',
+      },
+      ui: {
+        content: 'rounded-2xl shadow-sm',
+      },
+    }"
     :assistant="{
-  avatar: {
-    icon: 'i-lucide-bot',
-    alt: props.modelName || 'Gemini',
-    class: 'bg-primary',
-    ui: { icon: 'text-white' },
-  },
-}"
+      variant: 'soft',
+      color: 'neutral',
+      avatar: {
+        icon: 'i-lucide-bot',
+        alt: props.modelName || 'Gemini',
+        class: 'bg-primary ring-2 ring-default',
+        ui: { icon: 'text-white' },
+      },
+      ui: {
+        content: 'rounded-2xl shadow-sm ring-1 ring-default/70',
+      },
+    }"
     class="chat-transcript relative p-4 sm:p-6"
   >
     <template #header="{ id }" >
-      <div v-if="dividerFor(id)" class="my-4 flex items-center gap-3 first:mt-0">
+      <!--
+        A day marker drawn as a chip rather than as two rules meeting a
+        word: the label carries its own surface, so it stays legible where
+        it crosses the edge of a bubble instead of disappearing into it.
+      -->
+      <div v-if="dividerFor(id)" class="my-5 flex items-center gap-3 first:mt-0">
         <span class="h-px flex-1 bg-accented" />
-        <span class="text-xs font-medium text-dimmed">{{ dividerFor(id) }}</span>
+        <span class="rounded-full bg-elevated px-2.5 py-0.5 text-xs font-medium text-dimmed ring-1 ring-default/60">
+          {{ dividerFor(id) }}
+        </span>
         <span class="h-px flex-1 bg-accented" />
       </div>
     </template>

@@ -309,13 +309,22 @@ function onDragLeave() {
       <p class="text-sm font-medium text-highlighted">Drop images or PDFs to attach</p>
     </div>
 
+    <!--
+      The prompt is the one thing on screen that is always actionable, so
+      it is the one thing given real elevation: a resting shadow to lift it
+      off the canvas, and a ring in the accent while the caret is inside so
+      it is obvious where keystrokes will land. Both are transitions, which
+      the reduced motion block in main.css switches off together.
+    -->
     <UChatPrompt
       v-model="text"
       as="div"
       :submit-on-enter="false"
       :autofocus="false"
       placeholder="Ask Gemini anything, or drop a file"
-      :ui="{ root: 'rounded-2xl' }"
+      :ui="{
+        root: 'rounded-2xl shadow-sm ring-default/80 transition-shadow duration-200 focus-within:shadow-lg focus-within:ring-2 focus-within:ring-primary/40',
+      }"
       @keydown="onKeydown"
     >
       <template #header>
