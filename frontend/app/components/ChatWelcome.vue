@@ -30,7 +30,18 @@ const starters = [
 </script>
 
 <template>
-  <div class="mx-auto flex w-full max-w-3xl flex-1 flex-col justify-center px-6 py-12">
+  <!--
+    This lives in a column that does not scroll -- the transcript does
+    that -- so it has to be its own scroller or the third starter card is
+    simply unreachable on a short phone. It is also why the vertical
+    centring is dropped below "sm": a centred flex child that overflows is
+    clipped at the top as well as the bottom, and the heading would go
+    first. Above the breakpoint there is room for the content and it is
+    centred as before.
+  -->
+  <div
+    class="mx-auto flex w-full max-w-3xl flex-1 flex-col justify-start overflow-y-auto px-6 py-8 sm:justify-center sm:py-12"
+  >
     <ChatLogo class="mb-6" />
 
     <!--

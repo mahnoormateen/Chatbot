@@ -233,6 +233,21 @@ function onEditKeydown(event: KeyboardEvent) {
 
     "rounded-2xl" on the content slot softens the stock rounded-lg, which
     is noticeably tight once a bubble is large enough to hold a paragraph.
+
+    Two more overrides on the user side are phone-only concessions. The
+    theme caps the container at 75% of the column, which on a 390px screen
+    leaves roughly 180px of text once the avatar, the gap and the bubble's
+    own padding are taken off it, so it is widened to 85% below "sm". And
+    the avatar is dropped entirely at that width: it was never carrying
+    information, since there is exactly one user and their turns are
+    already on the right and tinted with the accent, so it was spending
+    44px -- avatar plus gap -- to repeat what the bubble already said. The
+    wrapper is hidden rather than just the image so the flex gap does not
+    survive as a bare 12px.
+
+    These have to live up here rather than beside the classes they explain:
+    the Vue template parser refuses a comment inside an element's attribute
+    list, and a build fails on it.
   -->
   <UChatMessages
     :messages="props.messages"
@@ -249,6 +264,8 @@ function onEditKeydown(event: KeyboardEvent) {
       },
       ui: {
         content: 'rounded-2xl shadow-sm',
+        container: 'max-w-[85%] sm:max-w-[75%]',
+        leading: 'hidden sm:inline-flex',
       },
     }"
     :assistant="{

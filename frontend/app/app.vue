@@ -22,7 +22,30 @@ const themeColor = computed(() =>
 useHead({
   meta: [
     { charset: 'utf-8' },
-    { name: 'viewport', content: 'width=device-width, initial-scale=1' },
+    {
+      name: 'viewport',
+      /**
+       * Two mobile-only opt-ins, both ignored by desktop browsers.
+       *
+       * "viewport-fit=cover" lets the layout reach under the rounded
+       * corners and the home indicator. It is also the switch that makes
+       * env(safe-area-inset-*) report anything other than zero: without
+       * it every inset in main.css resolves to 0px and the padding they
+       * feed is silently dead. The cost is that the app is then responsible
+       * for staying out of the unsafe edges itself, which is what the
+       * --safe-* variables are for.
+       *
+       * "interactive-widget=resizes-content" asks the browser to shrink
+       * the layout viewport when the on-screen keyboard opens. It matters
+       * here because the shell is "fixed inset-0": nothing in the document
+       * scrolls, so without this the keyboard simply covers the composer.
+       * Chrome and Android honour it; iOS ignores it and no meta tag can
+       * change that, so the composer is still the last thing to go under
+       * the keyboard on a Safari phone.
+       */
+      content:
+        'width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content',
+    },
     { key: 'theme-color', name: 'theme-color', content: themeColor },
   ],
   htmlAttrs: {

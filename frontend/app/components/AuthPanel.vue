@@ -44,8 +44,15 @@ function toggle() {
   <!--
     The glow is on the wrapper rather than the card so it reads as light
     falling on the page, not as part of the card's own surface.
+
+    Same reasoning as the welcome screen: a centred grid item that is
+    taller than its container is clipped at the top as well as the bottom,
+    and the register form is taller than a small phone. So this scrolls,
+    and the centring only applies once there is room for it.
   -->
-  <div class="app-canvas grid min-h-svh place-items-center px-6 py-10">
+  <div
+    class="app-canvas grid min-h-svh place-items-start overflow-y-auto px-6 py-8 sm:place-items-center sm:py-10"
+  >
     <UCard class="w-full max-w-sm shadow-xl ring-1 ring-default/70 backdrop-blur-sm">
       <template #header>
         <div class="flex items-start justify-between gap-2">

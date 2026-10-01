@@ -117,9 +117,22 @@ const sidebarOpen = ref(false)
     />
 
     <div class="relative flex min-w-0 flex-1 flex-col">
+      <!--
+        "min-h-0" replaces "min-h-svh" on the panel. The group this sits in
+        is "fixed inset-0", so the panel already measures exactly one
+        viewport tall by stretch; the minimum was redundant, and it became
+        actively harmful once the top safe inset was added as padding,
+        because a box that is at-least-viewport-tall *including* that
+        padding overflows the group by that much and gets clipped.
+
+        The top padding is what keeps the navbar out from under a notch.
+        It goes on the panel rather than the navbar because the navbar has
+        a fixed height from the theme: padding inside it would eat the
+        height of its own contents.
+      -->
       <UDashboardPanel
           id="chat"
-          class="min-h-svh flex-1"
+          class="flex-1 pt-[var(--safe-top)]"
           :ui="{
           body: 'app-canvas flex min-h-0 flex-1 flex-col gap-0 overflow-hidden p-0 sm:p-0',
         }"
@@ -159,8 +172,13 @@ const sidebarOpen = ref(false)
             has to be the element that scrolls, because UChatMessages
             attaches its auto-scroll behaviour to whatever scroll parent
             it finds when it mounts.
+
+            The side insets are added here rather than on the transcript
+            and the composer separately, because they wrap both: in
+            landscape on a notched phone this is the strip beside the
+            camera housing that would otherwise hold the send button.
           -->
-          <div class="flex min-h-0 flex-1 flex-col">
+          <div class="flex min-h-0 flex-1 flex-col ps-[var(--safe-left)] pe-[var(--safe-right)]">
             <!--
               The skeleton sits in the same capped column as the
               transcript, so the page does not visibly change width the
@@ -196,7 +214,12 @@ const sidebarOpen = ref(false)
 
             <ChatWelcome v-else @prompt="sendMessage"/>
 
-            <footer class="shrink-0 mx-auto w-full max-w-3xl">
+            <!--
+              The bottom inset is the home indicator on an iPhone. Without
+              it the send button sits under the swipe bar, which is a
+              control that looks reachable and is not.
+            -->
+            <footer class="mx-auto w-full max-w-3xl shrink-0 pb-[var(--safe-bottom)]">
               <ErrorBanner
                   v-if="error"
                   :error="error"

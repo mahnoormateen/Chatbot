@@ -67,6 +67,24 @@ const sidebarOpen = computed({
  */
 const collapsed = ref(false)
 
+/**
+ * Below "lg" the sidebar is not a rail at all, it is a slideover, and a
+ * collapsed rail there draws an empty drawer: the slots above all hide
+ * themselves once collapsed, and the button that would expand it again is
+ * "hidden lg:flex" in the theme, so there is nothing left to click.
+ *
+ * Reaching that state needs a window narrower than the breakpoint while
+ * the rail is collapsed -- rotating a tablet, or dragging a desktop window
+ * down past 1024px -- and the drawer cannot be opened without passing
+ * through the watch below, so clearing the flag here covers it. The rail
+ * comes back expanded rather than remembering it, which is the safe way
+ * round: an empty drawer has no way out, an expanded rail is only a lost
+ * preference.
+ */
+watch(sidebarOpen, (open) => {
+  if (open) collapsed.value = false
+})
+
 const query = ref('')
 
 const filtered = computed(() => {

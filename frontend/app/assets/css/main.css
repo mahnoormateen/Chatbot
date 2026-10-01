@@ -25,6 +25,28 @@
   --code-meta: #6a737d;
   --code-addition: #22863a;
   --code-deletion: #b31d28;
+
+  /*
+     Safe-area insets, named once.
+
+     The distance a phone reserves for the home indicator, the rounded
+     corners and the notch. They are read by arbitrary-value utilities in
+     the templates ("pb-[var(--safe-bottom)]") so a long env() expression
+     is not repeated at every call site, and so there is one place to look
+     when a padding looks wrong on real hardware.
+
+     The second argument is what makes these usable outside a supported
+     browser: env() with no fallback resolves to an invalid value at
+     computed-value time, which silently drops the whole declaration.
+
+     All four are 0px on desktop and on a phone with no notch, so they cost
+     nothing there. They only become non-zero because app.vue opts the
+     viewport in with viewport-fit=cover.
+  */
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
 }
 
 .dark {
