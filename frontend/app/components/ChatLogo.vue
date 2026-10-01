@@ -15,7 +15,7 @@ defineProps<{
     <span
       class="grid size-8 shrink-0 place-items-center rounded-lg bg-primary text-primary-inverted"
     >
-      <UIcon name="i-lucide-sparkles" class="size-5 text-white" />
+      <UIcon name="i-lucide-bot" class="size-5 text-white" />
     </span>
     <span v-if="!compact" class="truncate text-sm font-semibold text-highlighted">
       Gemini Chat

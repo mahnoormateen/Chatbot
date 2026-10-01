@@ -239,7 +239,7 @@ function onEditKeydown(event: KeyboardEvent) {
     class="chat-transcript relative p-6"
   >
     <template #header="{ id }">
-      <div v-if="dividerFor(id)" class="my-4 flex items-center gap-3 first:mt-0">
+      <div v-if="dividerFor(id)" class="my-4 flex items-center gap-3 first:mt-0 justify-center">
         <span class="h-px flex-1 bg-accented" />
         <span class="text-xs font-medium text-dimmed">{{ dividerFor(id) }}</span>
         <span class="h-px flex-1 bg-accented" />
