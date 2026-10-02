@@ -301,10 +301,25 @@ body,
   color: var(--ui-text-dimmed);
 }
 
+/*
+   A list nested inside an item used to pick up the top level's 10px of
+   space below it as well, which opened a gap between the nested list and
+   whatever followed the parent item. The inner list ends where the item
+   ends, so the margin is dropped and the indent is tightened to keep the
+   nesting readable without it drifting too far right on a narrow screen.
+ */
+.rich-text li > ul,
+.rich-text li > ol {
+  margin-bottom: 0;
+  padding-left: 18px;
+}
+
 .rich-text blockquote {
   margin: 0 0 10px;
-  padding: 2px 12px;
-  border-left: 3px solid var(--ui-border-accented);
+  padding: 8px 12px;
+  border-left: 3px solid var(--ui-primary);
+  border-radius: 0 var(--ui-radius) var(--ui-radius) 0;
+  background: var(--ui-bg-accented);
   color: var(--ui-text-muted);
 }
 
@@ -323,13 +338,34 @@ body,
 .rich-text img {
   max-width: 100%;
   border-radius: var(--ui-radius);
+  /* Without an edge an image on the bubble is a rectangle of colour with
+     no indication of where it begins or ends. */
+  box-shadow: 0 0 0 1px var(--ui-border-accented);
 }
 
+/*
+   Everything from here to the end of the code block styling is a surface
+   that sits *inside* a message bubble, and they all share one tone:
+   --ui-bg-accented.
+
+   The bubble behind them is --ui-bg-elevated, so "accented" is the next
+   step away from it in both colour modes -- neutral-200 against a
+   neutral-100 bubble in light, neutral-700 against a neutral-800 one in
+   dark. Using --ui-bg-elevated for these, as they were, made every nested
+   block exactly the colour of the bubble it sat in and left only a 1px
+   border to say they were different things.
+
+   --ui-bg-muted is deliberately not the choice. It runs the other way in
+   light mode (neutral-50, lighter than the bubble) and lands on the same
+   value as --ui-bg-elevated in dark, so it would read inconsistently.
+   "Accented" is the only tone that steps away from the bubble in the right
+   direction either way.
+ */
 .rich-text :not(pre) > code {
   padding: 1px 5px;
-  border: 1px solid var(--ui-border);
+  border: 1px solid var(--ui-border-accented);
   border-radius: 5px;
-  background: var(--ui-bg-elevated);
+  background: var(--ui-bg-accented);
   color: var(--ui-text-highlighted);
   font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
   font-size: 0.9em;
@@ -346,12 +382,14 @@ body,
 .rich-text th,
 .rich-text td {
   padding: 6px 10px;
-  border: 1px solid var(--ui-border);
+  /* --ui-border rather than --ui-border-accented left the grid almost
+     invisible against the block behind it. */
+  border: 1px solid var(--ui-border-accented);
   text-align: left;
 }
 
 .rich-text th {
-  background: var(--ui-bg-elevated);
+  background: var(--ui-bg-accented);
   color: var(--ui-text-highlighted);
   font-weight: 600;
 }
@@ -359,9 +397,9 @@ body,
 /* Code block shell with the language label and copy button. */
 .rich-code {
   margin: 10px 0;
-  border: 1px solid var(--ui-border);
+  border: 1px solid var(--ui-border-accented);
   border-radius: var(--ui-radius);
-  background: var(--ui-bg-elevated);
+  background: var(--ui-bg-accented);
   overflow: hidden;
 }
 
@@ -371,7 +409,9 @@ body,
   justify-content: space-between;
   gap: 10px;
   padding: 5px 8px 5px 12px;
-  border-bottom: 1px solid var(--ui-border);
+  border-bottom: 1px solid var(--ui-border-accented);
+  /* The strip has to differ from the code below it, and muted does that in
+     both modes: lighter than the accented body in light, darker in dark. */
   background: var(--ui-bg-muted);
 }
 

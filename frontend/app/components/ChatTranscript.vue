@@ -248,6 +248,23 @@ function onEditKeydown(event: KeyboardEvent) {
     These have to live up here rather than beside the classes they explain:
     the Vue template parser refuses a comment inside an element's attribute
     list, and a build fails on it.
+
+    The assistant's "bg-elevated" replaces the compound variant's
+    "bg-elevated/50". Half strength was picked before this app settled on
+    neutral as its base, where --ui-bg-elevated is neutral-100 in light and
+    neutral-800 in dark; at 50% over --ui-bg that reads as almost nothing in
+    light, so a reply and the page behind it were both effectively white and
+    the ring was the only thing separating them. At full strength it is a
+    proper card in both modes. Everything nested inside a bubble has
+    consequently been moved one tone further out in main.css, to
+    --ui-bg-accented, which is the only value that steps away from the bubble
+    in the right direction in either colour mode.
+
+    The actions row gets a small raised pill for the same reason the cards
+    needed one: the timestamp and the two buttons are a unit, and a floating
+    row of three loose controls does not read as one. It sits in the
+    container's bottom padding, below the bubble rather than over it, so the
+    pill never has to be translucent enough to hide text behind.
   -->
   <UChatMessages
     :messages="props.messages"
@@ -266,6 +283,7 @@ function onEditKeydown(event: KeyboardEvent) {
         content: 'rounded-2xl shadow-sm',
         container: 'max-w-[85%] sm:max-w-[75%]',
         leading: 'hidden sm:inline-flex',
+        actions: 'gap-0.5 rounded-lg bg-elevated px-1 py-0.5 shadow-xs ring-1 ring-default/60',
       },
     }"
     :assistant="{
@@ -278,7 +296,8 @@ function onEditKeydown(event: KeyboardEvent) {
         ui: { icon: 'text-white' },
       },
       ui: {
-        content: 'rounded-2xl shadow-sm ring-1 ring-default/70',
+        content: 'bg-elevated rounded-2xl shadow-sm ring-1 ring-default',
+        actions: 'gap-0.5 rounded-lg bg-elevated px-1 py-0.5 shadow-xs ring-1 ring-default/60',
       },
     }"
     class="chat-transcript relative p-4 sm:p-6"
