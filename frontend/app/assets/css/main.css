@@ -319,7 +319,7 @@ body,
   padding: 8px 12px;
   border-left: 3px solid var(--ui-primary);
   border-radius: 0 var(--ui-radius) var(--ui-radius) 0;
-  background: var(--ui-bg-accented);
+  background: var(--ui-bg-elevated);
   color: var(--ui-text-muted);
 }
 
@@ -344,28 +344,34 @@ body,
 }
 
 /*
-   Everything from here to the end of the code block styling is a surface
-   that sits *inside* a message bubble, and they all share one tone:
-   --ui-bg-accented.
+   Everything from here down to the syntax colours is a surface that sits
+   inside a reply, and they all share one tone: --ui-bg-elevated.
 
-   The bubble behind them is --ui-bg-elevated, so "accented" is the next
-   step away from it in both colour modes -- neutral-200 against a
-   neutral-100 bubble in light, neutral-700 against a neutral-800 one in
-   dark. Using --ui-bg-elevated for these, as they were, made every nested
-   block exactly the colour of the bubble it sat in and left only a 1px
-   border to say they were different things.
+   A reply is "naked" now -- it has no bubble of its own -- so these are
+   being laid directly on the canvas, which is --ui-bg. That makes
+   "elevated" the right pick for a different reason than when they used to
+   be inside a card: it is the *smallest* step off the canvas that still
+   reads in both colour modes. Neutral-100 against white in light, neutral-800
+   against neutral-900 in dark. Anything stronger is more decoration than a
+   code block needs, and the complaint about the transcript being bulky was
+   largely about exactly that.
 
-   --ui-bg-muted is deliberately not the choice. It runs the other way in
-   light mode (neutral-50, lighter than the bubble) and lands on the same
-   value as --ui-bg-elevated in dark, so it would read inconsistently.
-   "Accented" is the only tone that steps away from the bubble in the right
-   direction either way.
+   --ui-bg-muted is deliberately not the choice. In light mode it is
+   neutral-50, which is lighter than the white it would sit on and therefore
+   invisible; in dark it collapses onto the same value as --ui-bg-elevated.
+   It reads as nothing or as nothing new, depending on the colour mode.
+
+   The code block's own header strip is one step further out again, to
+   --ui-bg-accented, because it has to differ from the code underneath it:
+   neutral-200 against a neutral-100 body in light, neutral-700 against a
+   neutral-800 one in dark. It moves in opposite directions on purpose --
+   lighter in light, darker in dark -- which is what a toolbar should do.
  */
 .rich-text :not(pre) > code {
   padding: 1px 5px;
   border: 1px solid var(--ui-border-accented);
   border-radius: 5px;
-  background: var(--ui-bg-accented);
+  background: var(--ui-bg-elevated);
   color: var(--ui-text-highlighted);
   font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
   font-size: 0.9em;
@@ -389,7 +395,7 @@ body,
 }
 
 .rich-text th {
-  background: var(--ui-bg-accented);
+  background: var(--ui-bg-elevated);
   color: var(--ui-text-highlighted);
   font-weight: 600;
 }
@@ -399,7 +405,7 @@ body,
   margin: 10px 0;
   border: 1px solid var(--ui-border-accented);
   border-radius: var(--ui-radius);
-  background: var(--ui-bg-accented);
+  background: var(--ui-bg-elevated);
   overflow: hidden;
 }
 
@@ -410,9 +416,7 @@ body,
   gap: 10px;
   padding: 5px 8px 5px 12px;
   border-bottom: 1px solid var(--ui-border-accented);
-  /* The strip has to differ from the code below it, and muted does that in
-     both modes: lighter than the accented body in light, darker in dark. */
-  background: var(--ui-bg-muted);
+  background: var(--ui-bg-accented);
 }
 
 .rich-code-lang {

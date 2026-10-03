@@ -218,21 +218,47 @@ function onEditKeydown(event: KeyboardEvent) {
 
 <template>
   <!--
-    Two deliberate departures from the component defaults, both about
-    telling the two sides apart at a glance.
+    The transcript's whole direction is "less", and the reason is a
+    measurement rather than a taste. The theme spends, per message:
 
-    The user is "solid" and the assistant is "soft". Both were the same
-    weight of surface before, so a reply and the question that prompted it
-    read as one undifferentiated run of grey boxes. The user bubble also
-    carries the accent, which is what makes a long transcript skimmable.
+      min-h-12   a 48px floor, so "Hi" is as tall as a paragraph
+      px-4 py-3  28px of padding inside every bubble
+      pb-8       32px reserved *under* every message for the actions row
+      gap-1      ...while messages sit only 4px apart from each other
+
+    So the height was dominated by decoration and by space reserved for
+    controls that stay hidden until you hover, and the space actually
+    between messages was the smallest thing on the screen. That reads as
+    cramped and bulky at once, which is what it looked like.
+
+    What replaced it:
+
+      "gap-3" on the list. That 4px was the congestion.
+
+      "pb-6" rather than "pb-8". The actions row is absolutely positioned
+      against the bottom of the container, so this has to be exactly as tall
+      as the row or the buttons ride up over the bubble. One line of
+      size-xs buttons is 24px, so 24px is the answer and the other 8px were
+      air nobody asked for.
+
+      "min-h-0" on the user bubble. The largest single saving on a short
+      exchange -- every "yes" in the app was being padded out to 48px.
+
+      The assistant is "naked": no surface, no ring, no shadow, no padding
+      and no minimum height. A long reply was five layers of chrome wrapped
+      around its own text, and replies are what fill a transcript. Sitting
+      straight on the canvas is also why its content sets "leading-relaxed":
+      with no bubble padding setting the measure, the line height has to come
+      from the type instead.
+
+    The two sides are still told apart at a glance, by the thing that costs
+    nothing: the user's turn is a solid accent bubble on the right, the
+    assistant's is plain text on the left behind a small bot avatar.
 
     The white goes on the icon slot, not the avatar root. The theme gives
     the icon its own text colour (text-muted from the neutral variant),
     and an element's own colour beats one inherited from its parent, so
     a class on the root never reaches the glyph.
-
-    "rounded-2xl" on the content slot softens the stock rounded-lg, which
-    is noticeably tight once a bubble is large enough to hold a paragraph.
 
     Two more overrides on the user side are phone-only concessions. The
     theme caps the container at 75% of the column, which on a 390px screen
@@ -245,32 +271,16 @@ function onEditKeydown(event: KeyboardEvent) {
     wrapper is hidden rather than just the image so the flex gap does not
     survive as a bare 12px.
 
-    These have to live up here rather than beside the classes they explain:
-    the Vue template parser refuses a comment inside an element's attribute
-    list, and a build fails on it.
-
-    The assistant's "bg-elevated" replaces the compound variant's
-    "bg-elevated/50". Half strength was picked before this app settled on
-    neutral as its base, where --ui-bg-elevated is neutral-100 in light and
-    neutral-800 in dark; at 50% over --ui-bg that reads as almost nothing in
-    light, so a reply and the page behind it were both effectively white and
-    the ring was the only thing separating them. At full strength it is a
-    proper card in both modes. Everything nested inside a bubble has
-    consequently been moved one tone further out in main.css, to
-    --ui-bg-accented, which is the only value that steps away from the bubble
-    in the right direction in either colour mode.
-
-    The actions row gets a small raised pill for the same reason the cards
-    needed one: the timestamp and the two buttons are a unit, and a floating
-    row of three loose controls does not read as one. It sits in the
-    container's bottom padding, below the bubble rather than over it, so the
-    pill never has to be translucent enough to hide text behind.
+    All of this has to live up here rather than beside the classes it
+    explains: the Vue template parser refuses a comment inside an element's
+    attribute list, and a build fails on it.
   -->
   <UChatMessages
     :messages="props.messages"
     :status="props.status"
     :should-auto-scroll="true"
     :spacing-offset="props.spacingOffset ?? 0"
+    :ui="{ root: 'gap-3' }"
     :user="{
       variant: 'solid',
       color: 'primary',
@@ -280,24 +290,27 @@ function onEditKeydown(event: KeyboardEvent) {
         class: 'ring-2 ring-default',
       },
       ui: {
-        content: 'rounded-2xl shadow-sm',
-        container: 'max-w-[85%] sm:max-w-[75%]',
+        content: 'rounded-2xl px-3.5 py-2 min-h-0 shadow-sm',
+        container: 'gap-2.5 pb-6 max-w-[85%] sm:max-w-[75%]',
         leading: 'hidden sm:inline-flex',
-        actions: 'gap-0.5 rounded-lg bg-elevated px-1 py-0.5 shadow-xs ring-1 ring-default/60',
+        actions: 'gap-0.5',
       },
     }"
     :assistant="{
-      variant: 'soft',
+      variant: 'naked',
       color: 'neutral',
       avatar: {
         icon: 'i-lucide-bot',
         alt: props.modelName || 'Gemini',
-        class: 'bg-primary ring-2 ring-default',
+        class: 'bg-primary ring-1 ring-default',
         ui: { icon: 'text-white' },
       },
       ui: {
-        content: 'bg-elevated rounded-2xl shadow-sm ring-1 ring-default',
-        actions: 'gap-0.5 rounded-lg bg-elevated px-1 py-0.5 shadow-xs ring-1 ring-default/60',
+        content: 'leading-relaxed',
+        container: 'gap-2.5 pb-6',
+        leading: 'mt-0.5',
+        leadingAvatarSize: 'sm',
+        actions: 'gap-0.5',
       },
     }"
     class="chat-transcript relative p-4 sm:p-6"
